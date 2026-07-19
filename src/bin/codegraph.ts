@@ -893,7 +893,7 @@ program
           clack.log.info(`${details.join(', ')} ${getGlyphs().dash} ${formatNumber(result.nodesUpdated)} nodes in ${formatDuration(result.durationMs)}`);
         }
         if (result.refsResolved) {
-          clack.log.success(`Recovered interrupted index: resolved ${formatNumber(result.refsResolved)} pending references`);
+          clack.log.success(`Resolved ${formatNumber(result.refsResolved)} pending references`);
         }
       }
 

@@ -28,6 +28,7 @@ describe('codegraph sync output', () => {
   beforeEach(async () => {
     tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'codegraph-sync-cmd-'));
     fs.writeFileSync(path.join(tempDir, 'helper.ts'), 'export function helper() { return 1; }\n');
+    fs.writeFileSync(path.join(tempDir, 'fallback.ts'), 'export function helper() { return 2; }\n');
     fs.writeFileSync(path.join(tempDir, 'app.ts'), "import { helper } from './helper';\nexport function app() { return helper(); }\n");
     const cg = CodeGraph.initSync(tempDir);
     await cg.indexAll();
@@ -47,8 +48,19 @@ describe('codegraph sync output', () => {
 
     const { stdout, code } = runSync(tempDir);
     expect(code).toBe(0);
-    expect(stdout).toMatch(/recovered interrupted index: resolved \d+ pending references/i);
+    expect(stdout).toMatch(/resolved \d+ pending references/i);
+    expect(stdout).not.toMatch(/recovered interrupted index/i);
     expect(stdout).not.toMatch(/already up to date/i);
+  });
+
+  it('uses neutral wording when a pure removal re-resolves pending references', () => {
+    fs.unlinkSync(path.join(tempDir, 'helper.ts'));
+
+    const { stdout, code } = runSync(tempDir);
+    expect(code).toBe(0);
+    expect(stdout).toMatch(/synced 1 changed files/i);
+    expect(stdout).toMatch(/resolved \d+ pending references/i);
+    expect(stdout).not.toMatch(/recovered interrupted index/i);
   });
 
   it('reports an index-busy sync instead of claiming it is up to date', () => {
