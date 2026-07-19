@@ -35,9 +35,11 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { ChildProcessWithoutNullStreams, spawn } from 'child_process';
 import * as fs from 'fs';
+import * as net from 'net';
 import * as os from 'os';
 import * as path from 'path';
 import { CodeGraph } from '../src';
+import { Daemon } from '../src/mcp/daemon';
 import { getDaemonSocketPath } from '../src/mcp/daemon-paths';
 
 const BIN = path.resolve(__dirname, '../dist/bin/codegraph.js');
@@ -196,6 +198,25 @@ describe('Shared MCP daemon (issue #411)', () => {
     await new Promise((r) => setTimeout(r, 50));
     servers.length = 0;
     fs.rmSync(tempDir, { recursive: true, force: true });
+  });
+
+  it('does not register a session when the client closes after the daemon hello', async () => {
+    const daemon = new Daemon(tempDir, { idleTimeoutMs: 0 });
+    const server = net.createServer((socket) => (daemon as any).handleConnection(socket));
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const address = server.address() as net.AddressInfo;
+    const client = net.createConnection(address.port, address.address);
+
+    try {
+      await new Promise<void>((resolve) => client.once('data', () => resolve()));
+      client.destroy();
+      await new Promise((resolve) => setTimeout(resolve, 25));
+
+      expect(daemon.getClientCount()).toBe(0);
+    } finally {
+      client.destroy();
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
   });
 
   it('two invocations share ONE detached daemon; both attach as proxies', async () => {
