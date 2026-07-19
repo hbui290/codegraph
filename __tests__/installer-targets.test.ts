@@ -88,6 +88,42 @@ describe('Installer targets — contract', () => {
     fs.rmSync(tmpCwd, { recursive: true, force: true });
   });
 
+  it('toml: replacing a table preserves a following array-of-tables block', () => {
+    const source = [
+      '[mcp_servers.codegraph]',
+      'command = "old-codegraph"',
+      '',
+      '[[history]]',
+      'id = 1',
+      '',
+    ].join('\n');
+    const block = buildTomlTable('mcp_servers.codegraph', {
+      command: 'codegraph',
+      args: ['serve', '--mcp'],
+    });
+
+    const result = upsertTomlTable(source, 'mcp_servers.codegraph', block);
+
+    expect(result.action).toBe('replaced');
+    expect(result.content).toContain('[[history]]\nid = 1');
+  });
+
+  it('toml: removing a table preserves a following array-of-tables block', () => {
+    const source = [
+      '[mcp_servers.codegraph]',
+      'command = "codegraph"',
+      '',
+      '[[history]]',
+      'id = 1',
+      '',
+    ].join('\n');
+
+    const result = removeTomlTable(source, 'mcp_servers.codegraph');
+
+    expect(result.action).toBe('removed');
+    expect(result.content).toBe('[[history]]\nid = 1\n');
+  });
+
   for (const target of ALL_TARGETS) {
     describe(target.id, () => {
       const supportedLocations = (['global', 'local'] as const).filter((l) =>

@@ -133,22 +133,11 @@ function findHeaderIndex(content: string, headerLine: string): number {
 }
 
 /**
- * Find the byte index of the next top-level `[...]` table header
- * (excluding array-of-tables `[[...]]`) starting from `from`, or
- * return content length when none.
+ * Find the byte index of the next top-level TOML table header, including
+ * array-of-tables `[[...]]`, starting from `from`, or return content length
+ * when none.
  */
 function findNextTableHeader(content: string, from: number): number {
-  // Look for "\n[" but skip "\n[[" (array of tables).
-  let i = from;
-  while (i < content.length) {
-    const nlIdx = content.indexOf('\n[', i);
-    if (nlIdx === -1) return content.length;
-    if (content[nlIdx + 2] === '[') {
-      // [[...]] — keep searching past it.
-      i = nlIdx + 2;
-      continue;
-    }
-    return nlIdx + 1;
-  }
-  return content.length;
+  const nlIdx = content.indexOf('\n[', from);
+  return nlIdx === -1 ? content.length : nlIdx + 1;
 }
