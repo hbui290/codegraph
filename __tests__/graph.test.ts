@@ -535,6 +535,44 @@ function tGraph(nodes: Node[], edges: Edge[]): GraphTraverser {
 }
 
 describe('Traversal edge-completeness & limits (#1086–#1090)', () => {
+  it('findPath queues a shared fan-in target once and keeps the shortest path (#1359)', () => {
+    // A reaches D through both B and C. D must be fetched/enqueued once even
+    // though its outgoing edges are read once when it is expanded.
+    const nodes = ['A', 'B', 'C', 'D', 'E'].map(tNode);
+    const edges: Edge[] = [
+      { source: 'A', target: 'B', kind: 'calls' },
+      { source: 'A', target: 'C', kind: 'calls' },
+      { source: 'B', target: 'D', kind: 'calls' },
+      { source: 'C', target: 'D', kind: 'calls' },
+      { source: 'D', target: 'E', kind: 'calls' },
+    ];
+    const byId = new Map(nodes.map((node) => [node.id, node]));
+    const outgoingReads = new Map<string, number>();
+    const nodeFetches = new Map<string, number>();
+    const q = {
+      getNodeById: (id: string) => byId.get(id) ?? null,
+      getNodesByIds: (ids: readonly string[]) => {
+        const result = new Map<string, Node>();
+        for (const id of ids) {
+          nodeFetches.set(id, (nodeFetches.get(id) ?? 0) + 1);
+          const node = byId.get(id);
+          if (node) result.set(id, node);
+        }
+        return result;
+      },
+      getOutgoingEdges: (source: string, kinds?: string[]) => {
+        outgoingReads.set(source, (outgoingReads.get(source) ?? 0) + 1);
+        return edges.filter((edge) => edge.source === source && (!kinds || kinds.includes(edge.kind)));
+      },
+    };
+
+    const path = new GraphTraverser(q as never).findPath('A', 'E');
+
+    expect(path?.map(({ node }) => node.id)).toEqual(['A', 'B', 'D', 'E']);
+    expect(outgoingReads.get('D')).toBe(1);
+    expect(nodeFetches.get('D')).toBe(1);
+  });
+
   it('traverseBFS keeps every parallel edge to the same target (#1090)', () => {
     // A reaches B via both `calls` and `references` — two distinct edges.
     const edges: Edge[] = [

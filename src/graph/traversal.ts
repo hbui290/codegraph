@@ -628,6 +628,7 @@ export class GraphTraverser {
 
     // BFS to find shortest path
     const visited = new Set<string>();
+    const queued = new Set<string>([fromId]);
     const queue: Array<{ nodeId: string; path: Array<{ node: Node; edge: Edge | null }> }> = [
       { nodeId: fromId, path: [{ node: fromNode, edge: null }] },
     ];
@@ -654,13 +655,14 @@ export class GraphTraverser {
       // Batch-fetch only the unvisited targets (was N+1 per BFS frontier).
       const wantIds = outgoingEdges
         .map((e) => e.target)
-        .filter((id) => !visited.has(id));
+        .filter((id) => !visited.has(id) && !queued.has(id));
       const nextNodes = wantIds.length > 0 ? this.queries.getNodesByIds(wantIds) : new Map();
 
       for (const edge of outgoingEdges) {
-        if (!visited.has(edge.target)) {
+        if (!visited.has(edge.target) && !queued.has(edge.target)) {
           const nextNode = nextNodes.get(edge.target);
           if (nextNode) {
+            queued.add(edge.target);
             queue.push({
               nodeId: edge.target,
               path: [...path, { node: nextNode, edge }],
