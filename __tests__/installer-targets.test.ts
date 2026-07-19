@@ -95,6 +95,7 @@ describe('Installer targets — contract', () => {
       '',
       '[[history]]',
       'id = 1',
+      'note = "must survive"',
       '',
     ].join('\n');
     const block = buildTomlTable('mcp_servers.codegraph', {
@@ -105,7 +106,14 @@ describe('Installer targets — contract', () => {
     const result = upsertTomlTable(source, 'mcp_servers.codegraph', block);
 
     expect(result.action).toBe('replaced');
-    expect(result.content).toContain('[[history]]\nid = 1');
+    expect(result.content).toBe([
+      block,
+      '',
+      '[[history]]',
+      'id = 1',
+      'note = "must survive"',
+      '',
+    ].join('\n'));
   });
 
   it('toml: removing a table preserves a following array-of-tables block', () => {
