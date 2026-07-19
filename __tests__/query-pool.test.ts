@@ -195,4 +195,26 @@ describe('QueryPool', () => {
     expect(pool.ready).toBe(false); // hard open failure — keep serving in-process
     await pool.destroy();
   });
+
+  it('removes a failed-ready worker before it can receive a queued call', async () => {
+    let created = 0;
+    let failedWorkerCalls = 0;
+    const pool = new QueryPool({
+      root: '/x', size: 1,
+      createWorker: () => {
+        created++;
+        if (created === 1) {
+          return new FakeWorker(() => {
+            failedWorkerCalls++;
+            return { result: ok('failed worker was dispatched') };
+          }, /* readyOk */ false);
+        }
+        return new FakeWorker(() => ({ result: ok('replacement served the call') }));
+      },
+    });
+    const res = await pool.run('codegraph_explore', { query: 'q' });
+    expect(failedWorkerCalls).toBe(0);
+    expect(res.content[0].text).toBe('replacement served the call');
+    await pool.destroy();
+  });
 });

@@ -219,9 +219,12 @@ export class QueryPool {
   private onMessage(w: PoolWorker, m: WorkerMessage): void {
     if (!m) return;
     if (m.type === 'ready') {
+      if (m.ok === false) {
+        this.onWorkerGone(w);
+        return;
+      }
       this.pendingWorkers.delete(w);
-      if (m.ok === false) this.totalCrashes++; // hard open failure
-      else this.everReady = true;
+      this.everReady = true;
       this.idle.push(w);
       this.drain();
       return;
