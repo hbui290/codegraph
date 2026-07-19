@@ -879,15 +879,22 @@ program
 
       const totalChanges = result.filesAdded + result.filesModified + result.filesRemoved;
 
-      if (totalChanges === 0) {
+      if (result.skippedDueToLock) {
+        clack.log.warn('Sync skipped: index busy');
+      } else if (totalChanges === 0 && !result.refsResolved) {
         clack.log.info('Already up to date');
       } else {
-        clack.log.success(`Synced ${formatNumber(totalChanges)} changed files`);
-        const details: string[] = [];
-        if (result.filesAdded > 0) details.push(`Added: ${result.filesAdded}`);
-        if (result.filesModified > 0) details.push(`Modified: ${result.filesModified}`);
-        if (result.filesRemoved > 0) details.push(`Removed: ${result.filesRemoved}`);
-        clack.log.info(`${details.join(', ')} ${getGlyphs().dash} ${formatNumber(result.nodesUpdated)} nodes in ${formatDuration(result.durationMs)}`);
+        if (totalChanges > 0) {
+          clack.log.success(`Synced ${formatNumber(totalChanges)} changed files`);
+          const details: string[] = [];
+          if (result.filesAdded > 0) details.push(`Added: ${result.filesAdded}`);
+          if (result.filesModified > 0) details.push(`Modified: ${result.filesModified}`);
+          if (result.filesRemoved > 0) details.push(`Removed: ${result.filesRemoved}`);
+          clack.log.info(`${details.join(', ')} ${getGlyphs().dash} ${formatNumber(result.nodesUpdated)} nodes in ${formatDuration(result.durationMs)}`);
+        }
+        if (result.refsResolved) {
+          clack.log.success(`Recovered interrupted index: resolved ${formatNumber(result.refsResolved)} pending references`);
+        }
       }
 
       clack.outro('Done');

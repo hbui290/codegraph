@@ -128,6 +128,7 @@ describe('Orphaned refs sweep (#1187)', () => {
       const result = await cg.sync();
       expect(result.filesAdded).toBe(0);
       expect(result.filesModified).toBe(0);
+      expect(result.refsResolved).toBeGreaterThan(0);
 
       expect(cg.getPendingReferenceCount()).toBe(0);
       expect(callerFiles(target)).toContain('src/notify/NotifyBuilder.java');

@@ -37,7 +37,7 @@ import {
   ExtractionOrchestrator,
   IndexProgress,
   IndexResult,
-  SyncResult,
+  SyncResult as ExtractionSyncResult,
   extractFromSource,
   initGrammars,
 } from './extraction';
@@ -72,7 +72,15 @@ export {
   findNearestCodeGraphRoot,
   CODEGRAPH_DIR,
 } from './directory';
-export { IndexProgress, IndexResult, SyncResult } from './extraction';
+export { IndexProgress, IndexResult } from './extraction';
+/**
+ * Result of a sync operation, including optional work and skip state added
+ * after the original file-counter contract.
+ */
+export interface SyncResult extends ExtractionSyncResult {
+  refsResolved?: number;
+  skippedDueToLock?: boolean;
+}
 export { detectLanguage, isLanguageSupported, isGrammarLoaded, getSupportedLanguages, initGrammars, loadGrammarsForLanguages, loadAllGrammars } from './extraction';
 export { ResolutionResult } from './resolution';
 export {
@@ -742,7 +750,7 @@ export class CodeGraph {
       try {
         this.fileLock.acquire();
       } catch {
-        return { filesChecked: 0, filesAdded: 0, filesModified: 0, filesRemoved: 0, nodesUpdated: 0, durationMs: 0 };
+        return { filesChecked: 0, filesAdded: 0, filesModified: 0, filesRemoved: 0, nodesUpdated: 0, durationMs: 0, skippedDueToLock: true };
       }
       // Defer WAL auto-checkpointing for the whole incremental run, exactly
       // as indexAll does for the bulk path (#1231): sync's store loop and its
@@ -778,7 +786,7 @@ export class CodeGraph {
           try { return this.queries.isNameSegmentVocabEmpty(); } catch { return false; }
         })();
 
-        const result = await this.orchestrator.sync(options.onProgress);
+        const result: SyncResult = await this.orchestrator.sync(options.onProgress);
 
         // Fold the store phase's WAL BEFORE the post-store reads below
         // (resolution reads on the main thread) — same rationale as
@@ -902,7 +910,7 @@ export class CodeGraph {
             total: orphanCount,
           });
 
-          await this.resolveReferencesBatched(
+          const orphanResolution = await this.resolveReferencesBatched(
             (current, total) => {
               options.onProgress?.({
                 phase: 'resolving',
@@ -918,6 +926,7 @@ export class CodeGraph {
               });
             }
           );
+          result.refsResolved = orphanResolution.stats.resolved;
         }
 
         if (filesChanged || orphanCount > 0) {
