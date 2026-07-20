@@ -1513,6 +1513,32 @@ describe('reactResolver.extract — React Router', () => {
     expect(references.map((r) => r.referenceName).sort()).toEqual(['Dashboard', 'Login']);
   });
 
+  it('does not borrow a nested Route element for its parent (#1348)', () => {
+    const src = `<Routes>
+      <Route path="/dashboard">
+        <Route index element={<DashboardHome/>} />
+        <Route path="settings" element={<Settings/>} />
+      </Route>
+    </Routes>`;
+    const { nodes, references } = reactResolver.extract!('routes.tsx', src);
+    expect(nodes.filter((node) => node.kind === 'route').map((node) => node.name).sort())
+      .toEqual(['/dashboard', 'settings']);
+    expect(references.map((reference) => reference.referenceName)).toEqual(['Settings']);
+  });
+
+  it('does not borrow a child data-route element for its parent (#1348)', () => {
+    const src = `const router = createBrowserRouter([
+      { path: '/dashboard', children: [
+        { index: true, element: <DashboardHome/> },
+        { path: 'settings', element: <Settings/> },
+      ] },
+    ]);`;
+    const { nodes, references } = reactResolver.extract!('router.tsx', src);
+    expect(nodes.filter((node) => node.kind === 'route').map((node) => node.name))
+      .toEqual(['/dashboard', 'settings']);
+    expect(references.map((reference) => reference.referenceName)).toEqual(['Settings']);
+  });
+
   it('does not treat config files or a nextjs-pages dir as Next.js routes', () => {
     const cfg = reactResolver.extract!('apps/nextjs-pages/next.config.mjs', 'export default {}');
     expect(cfg.nodes.filter((n) => n.kind === 'route')).toHaveLength(0);

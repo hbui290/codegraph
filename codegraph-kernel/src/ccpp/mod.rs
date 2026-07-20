@@ -484,7 +484,7 @@ impl<'t> Walker<'t> {
             return None;
         }
         let start_line = self.line_of(node);
-        let id = ids::node_id(self.file_path, kind, name, start_line);
+        let id = ids::node_id(self.file_path, kind, name, start_line, node.start_byte());
         // (c/cpp define no resolveBody hook, so createNode's endLine extension
         // for sibling-body grammars never fires — endLine is the node's own.)
         let end_line = node.end_position().row as u32 + 1;

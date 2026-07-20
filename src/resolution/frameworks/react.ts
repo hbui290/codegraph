@@ -114,7 +114,8 @@ export const reactResolver: FrameworkResolver = {
     const routeTagRegex = /<Route\b/g;
     let routeMatch: RegExpExecArray | null;
     while ((routeMatch = routeTagRegex.exec(content)) !== null) {
-      const window = content.slice(routeMatch.index, routeMatch.index + 400);
+      const nextRoute = content.indexOf('<Route', routeMatch.index + 6);
+      const window = content.slice(routeMatch.index, nextRoute === -1 ? content.length : nextRoute);
       const pathMatch = window.match(/\bpath\s*=\s*["']([^"']+)["']/);
       if (!pathMatch) continue; // index/layout routes without a path
       const routePath = pathMatch[1]!;
@@ -157,11 +158,13 @@ export const reactResolver: FrameworkResolver = {
       const objPathRe = /\bpath\s*:\s*['"]([^'"]*)['"]/g;
       let om: RegExpExecArray | null;
       while ((om = objPathRe.exec(content)) !== null) {
-        const win = content.slice(om.index, om.index + 300);
+        const windowEnd = om.index + 300;
+        const children = content.indexOf('children:', om.index);
+        const win = content.slice(om.index, children === -1 || children > windowEnd ? windowEnd : children);
         const compMatch =
           win.match(/\belement\s*:\s*<\s*([A-Z][A-Za-z0-9_]*)/) ||
           win.match(/\bComponent\s*:\s*([A-Z][A-Za-z0-9_]*)/);
-        if (!compMatch) continue; // require a component → it's a real route object
+        if (!compMatch && (children === -1 || children > windowEnd)) continue;
         const routePath = om[1] || '/';
         const line = content.slice(0, om.index).split('\n').length;
         const routeNode: Node = {
@@ -178,15 +181,17 @@ export const reactResolver: FrameworkResolver = {
           updatedAt: now,
         };
         nodes.push(routeNode);
-        references.push({
-          fromNodeId: routeNode.id,
-          referenceName: compMatch[1]!,
-          referenceKind: 'references',
-          line,
-          column: 0,
-          filePath,
-          language: filePath.endsWith('.tsx') ? 'tsx' : 'jsx',
-        });
+        if (compMatch) {
+          references.push({
+            fromNodeId: routeNode.id,
+            referenceName: compMatch[1]!,
+            referenceKind: 'references',
+            line,
+            column: 0,
+            filePath,
+            language: filePath.endsWith('.tsx') ? 'tsx' : 'jsx',
+          });
+        }
       }
     }
 

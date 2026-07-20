@@ -119,7 +119,7 @@ export class CfmlExtractor {
   /** Build the file's own `kind:'file'` node, spanning the whole source. Tag-based files need this explicitly — unlike `extractBareScript` (which delegates the whole file to `TreeSitterExtractor` and inherits its file node), `extractTagBased` walks the tree itself and has no other source of one. */
   private createFileNode(): Node {
     const lines = this.source.split('\n');
-    const id = generateNodeId(this.filePath, 'file', this.filePath, 1);
+    const id = generateNodeId(this.filePath, 'file', this.filePath, 1, 0);
     const fileNode: Node = {
       id,
       kind: 'file',
@@ -174,7 +174,7 @@ export class CfmlExtractor {
    */
   private extractComponent(openTag: SyntaxNode, containerId: string | undefined): SyntaxNode {
     const name = this.tagAttr(openTag, 'name') ?? this.componentNameFromPath();
-    const id = generateNodeId(this.filePath, 'class', name, openTag.startPosition.row + 1);
+    const id = generateNodeId(this.filePath, 'class', name, openTag.startPosition.row + 1, openTag.startIndex);
 
     const classNode: Node = {
       id,
@@ -261,7 +261,7 @@ export class CfmlExtractor {
     if (!name) return;
 
     const kind = parentClassId ? 'method' : 'function';
-    const id = generateNodeId(this.filePath, kind, name, tag.startPosition.row + 1);
+    const id = generateNodeId(this.filePath, kind, name, tag.startPosition.row + 1, tag.startIndex);
     const access = this.tagAttr(tag, 'access');
     const visibility = access === 'private' ? 'private'
       : access === 'package' ? 'internal'

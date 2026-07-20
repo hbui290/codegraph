@@ -55,7 +55,7 @@ export class DfmExtractor {
   /** Create a file node for the DFM form file */
   private createFileNode(): Node {
     const lines = this.source.split('\n');
-    const id = generateNodeId(this.filePath, 'file', this.filePath, 1);
+    const id = generateNodeId(this.filePath, 'file', this.filePath, 1, 0);
 
     const fileNode: Node = {
       id,
@@ -112,7 +112,8 @@ export class DfmExtractor {
       const objMatch = line.match(objectPattern);
       if (objMatch) {
         const [, , name, typeName] = objMatch;
-        const nodeId = generateNodeId(this.filePath, 'component', name!, lineNum);
+        const startOffset = lines.slice(0, i).reduce((offset, previous) => offset + previous.length + 1, 0);
+        const nodeId = generateNodeId(this.filePath, 'component', name!, lineNum, startOffset);
         this.nodes.push({
           id: nodeId,
           kind: 'component',

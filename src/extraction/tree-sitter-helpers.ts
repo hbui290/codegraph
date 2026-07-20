@@ -19,11 +19,12 @@ export function generateNodeId(
   filePath: string,
   kind: NodeKind,
   name: string,
-  line: number
+  line: number,
+  startOffset: number
 ): string {
   const hash = crypto
     .createHash('sha256')
-    .update(`${filePath}:${kind}:${name}:${line}`)
+    .update(`${filePath}:${kind}:${name}:${line}:${startOffset}`)
     .digest('hex')
     .substring(0, 32);
   return `${kind}:${hash}`;

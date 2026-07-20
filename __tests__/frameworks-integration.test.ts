@@ -1084,6 +1084,44 @@ export function AppRoutes() {
   });
 });
 
+describe('Callback synthesis target selection', () => {
+  let tmpDir: string | undefined;
+  afterEach(() => {
+    if (tmpDir) fs.rmSync(tmpDir, { recursive: true, force: true });
+    tmpDir = undefined;
+  });
+
+  it('uses the callback method from the subscribing file when names collide (#1355)', async () => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'cg-callback-'));
+    fs.writeFileSync(path.join(tmpDir, 'decoy.ts'), 'export class Decoy { triggerRender() {} }\n');
+    fs.writeFileSync(
+      path.join(tmpDir, 'store.ts'),
+      'export class Store {\n  handlers = new Set<() => void>();\n  subscribe(callback: () => void) { this.handlers.add(callback); }\n  emit() { this.handlers.forEach((handler) => handler()); }\n}\nexport const store = new Store();\n'
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, 'real.ts'),
+      "import { store } from './store';\nexport class Real {\n  triggerRender() {}\n  connect() { store.subscribe(this.triggerRender); }\n}\n"
+    );
+
+    const cg = CodeGraph.initSync(tmpDir);
+    await cg.indexAll();
+    try {
+      const emit = cg.getNodesByName('emit').find((node) => node.filePath.endsWith('store.ts'));
+      const real = cg.getNodesByName('triggerRender').find((node) => node.filePath.endsWith('real.ts'));
+      const decoy = cg.getNodesByName('triggerRender').find((node) => node.filePath.endsWith('decoy.ts'));
+      expect(emit).toBeDefined();
+      expect(real).toBeDefined();
+      const callbackEdges = cg.getOutgoingEdges(emit!.id).filter(
+        (edge) => (edge.metadata as { synthesizedBy?: string } | undefined)?.synthesizedBy === 'callback'
+      );
+      expect(callbackEdges.map((edge) => edge.target)).toContain(real!.id);
+      expect(callbackEdges.map((edge) => edge.target)).not.toContain(decoy!.id);
+    } finally {
+      cg.close();
+    }
+  });
+});
+
 describe('Terraform end-to-end module-boundary resolution', () => {
   let tmpDir: string | undefined;
   afterEach(() => {

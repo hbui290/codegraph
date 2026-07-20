@@ -11462,4 +11462,16 @@ describe('C/C++ kernel-port preParse blanks (R7a)', () => {
     expect(result.nodes.some((n) => n.kind === 'class' && n.name === 'Widget')).toBe(true);
     expect(result.nodes.some((n) => n.kind === 'method' && n.name === 'size')).toBe(true);
   });
+
+  it('keeps same-line TypeScript getters and setters as distinct nodes (#1349)', async () => {
+    const { extractFromSource } = await import('../src/extraction');
+    const result = extractFromSource(
+      'src/api.ts',
+      'class Api { get request(): string { return ""; } set request(value: string) {} }\n',
+      'typescript'
+    );
+    const requests = result.nodes.filter((node) => node.name === 'request');
+    expect(requests).toHaveLength(2);
+    expect(new Set(requests.map((node) => node.id)).size).toBe(2);
+  });
 });

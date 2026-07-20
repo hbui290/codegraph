@@ -210,7 +210,9 @@ async function fieldChannelEdges(queries: QueryBuilder, ctx: ResolutionContext, 
       const line = ctx.readFile(caller.filePath)?.split('\n')[e.line - 1];
       const am = line?.match(argRe);
       if (!am) continue;
-      const fn = ctx.getNodesByName(am[1]!).find((n) => n.kind === 'method' || n.kind === 'function');
+      const fn = ctx.getNodesByName(am[1]!).find(
+        (n) => n.filePath === caller.filePath && (n.kind === 'method' || n.kind === 'function')
+      );
       if (!fn) continue;
       for (const disp of chDispatchers) {
         if (disp.node.id === fn.id) continue;

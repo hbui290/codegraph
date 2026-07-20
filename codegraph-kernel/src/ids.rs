@@ -1,7 +1,7 @@
 //! Node-ID generation — MUST produce byte-identical output to
 //! `generateNodeId` in `src/extraction/tree-sitter-helpers.ts`:
 //!
-//!   `${kind}:${sha256(`${filePath}:${kind}:${name}:${line}`).hex[0..32]}`
+//!   `${kind}:${sha256(`${filePath}:${kind}:${name}:${line}:${startOffset}`).hex[0..32]}`
 //!
 //! and the file-node special case in `TreeSitterExtractor.extract()`:
 //!
@@ -13,7 +13,7 @@
 
 use sha2::{Digest, Sha256};
 
-pub fn node_id(file_path: &str, kind: &str, name: &str, line: u32) -> String {
+pub fn node_id(file_path: &str, kind: &str, name: &str, line: u32, start_offset: usize) -> String {
     let mut hasher = Sha256::new();
     hasher.update(file_path.as_bytes());
     hasher.update(b":");
@@ -22,6 +22,8 @@ pub fn node_id(file_path: &str, kind: &str, name: &str, line: u32) -> String {
     hasher.update(name.as_bytes());
     hasher.update(b":");
     hasher.update(line.to_string().as_bytes());
+    hasher.update(b":");
+    hasher.update(start_offset.to_string().as_bytes());
     let digest = hasher.finalize();
     // 32 hex chars = first 16 bytes.
     let mut hex = String::with_capacity(kind.len() + 1 + 32);
@@ -44,10 +46,10 @@ mod tests {
     #[test]
     fn matches_known_ts_output() {
         // Pinned vector: node -e "crypto.createHash('sha256')
-        //   .update('src/a.ts:function:foo:3').digest('hex').substring(0,32)"
+        //   .update('src/a.ts:function:foo:3:0').digest('hex').substring(0,32)"
         assert_eq!(
-            node_id("src/a.ts", "function", "foo", 3),
-            "function:bfb15544fed707794274a5c61006ea7b"
+            node_id("src/a.ts", "function", "foo", 3, 0),
+            "function:faf941fc0172a7cc222fe2fe26736ba5"
         );
     }
 }

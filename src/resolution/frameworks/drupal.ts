@@ -232,6 +232,7 @@ function extractDrupalHooks(
   // Build a map of function name → 1-indexed line number for all top-level functions.
   // This mirrors tree-sitter's line numbering so we can reconstruct node IDs.
   const funcLineMap = new Map<string, number>();
+  const funcOffsetMap = new Map<string, number>();
   const funcDef = /^function\s+(\w+)\s*\(/gm;
   let fm: RegExpExecArray | null;
   while ((fm = funcDef.exec(content)) !== null) {
@@ -239,13 +240,15 @@ function extractDrupalHooks(
     if (!funcLineMap.has(name)) {
       // line = number of newlines before match start + 1
       funcLineMap.set(name, content.slice(0, fm.index).split('\n').length);
+      funcOffsetMap.set(name, fm.index);
     }
   }
 
   const emitHookRef = (hookName: string, funcName: string) => {
     const lineNum = funcLineMap.get(funcName);
-    if (lineNum === undefined) return;
-    const nodeId = generateNodeId(filePath, 'function', funcName, lineNum);
+    const startOffset = funcOffsetMap.get(funcName);
+    if (lineNum === undefined || startOffset === undefined) return;
+    const nodeId = generateNodeId(filePath, 'function', funcName, lineNum, startOffset);
     references.push({
       fromNodeId: nodeId,
       referenceName: hookName,

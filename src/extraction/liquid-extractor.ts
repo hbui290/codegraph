@@ -74,7 +74,7 @@ export class LiquidExtractor {
    */
   private createFileNode(): Node {
     const lines = this.source.split('\n');
-    const id = generateNodeId(this.filePath, 'file', this.filePath, 1);
+    const id = generateNodeId(this.filePath, 'file', this.filePath, 1, 0);
 
     const fileNode: Node = {
       id,
@@ -137,7 +137,7 @@ export class LiquidExtractor {
       const line = this.getLineNumber(match.index);
 
       // Create an import node for searchability
-      const importNodeId = generateNodeId(this.filePath, 'import', snippetName!, line);
+      const importNodeId = generateNodeId(this.filePath, 'import', snippetName!, line, match.index);
       const importNode: Node = {
         id: importNodeId,
         kind: 'import',
@@ -162,7 +162,7 @@ export class LiquidExtractor {
       });
 
       // Create a component node for the snippet reference
-      const nodeId = generateNodeId(this.filePath, 'component', `${tagType}:${snippetName}`, line);
+      const nodeId = generateNodeId(this.filePath, 'component', `${tagType}:${snippetName}`, line, match.index);
 
       const node: Node = {
         id: nodeId,
@@ -211,7 +211,7 @@ export class LiquidExtractor {
       const line = this.getLineNumber(match.index);
 
       // Create an import node for searchability
-      const importNodeId = generateNodeId(this.filePath, 'import', sectionName!, line);
+      const importNodeId = generateNodeId(this.filePath, 'import', sectionName!, line, match.index);
       const importNode: Node = {
         id: importNodeId,
         kind: 'import',
@@ -236,7 +236,7 @@ export class LiquidExtractor {
       });
 
       // Create a component node for the section reference
-      const nodeId = generateNodeId(this.filePath, 'component', `section:${sectionName}`, line);
+      const nodeId = generateNodeId(this.filePath, 'component', `section:${sectionName}`, line, match.index);
 
       const node: Node = {
         id: nodeId,
@@ -300,7 +300,7 @@ export class LiquidExtractor {
       }
 
       // Create a node for the schema
-      const nodeId = generateNodeId(this.filePath, 'constant', `schema:${schemaName}`, startLine);
+      const nodeId = generateNodeId(this.filePath, 'constant', `schema:${schemaName}`, startLine, match.index);
 
       const node: Node = {
         id: nodeId,
@@ -344,7 +344,7 @@ export class LiquidExtractor {
       const line = this.getLineNumber(match.index);
 
       // Create a variable node
-      const nodeId = generateNodeId(this.filePath, 'variable', variableName!, line);
+      const nodeId = generateNodeId(this.filePath, 'variable', variableName!, line, match.index);
 
       const node: Node = {
         id: nodeId,

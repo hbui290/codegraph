@@ -96,7 +96,7 @@ export class RazorExtractor {
     const fileName = this.filePath.split(/[/\\]/).pop() || this.filePath;
     const componentName = fileName.replace(/\.(razor|cshtml)$/i, '');
     const node: Node = {
-      id: generateNodeId(this.filePath, 'component', componentName, 1),
+      id: generateNodeId(this.filePath, 'component', componentName, 1, 0),
       kind: 'component',
       name: componentName,
       qualifiedName: `${this.filePath}::${componentName}`,

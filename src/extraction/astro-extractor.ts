@@ -91,7 +91,7 @@ export class AstroExtractor {
     const lines = this.source.split('\n');
     const fileName = this.filePath.split(/[/\\]/).pop() || this.filePath;
     const componentName = fileName.replace(/\.astro$/, '');
-    const id = generateNodeId(this.filePath, 'component', componentName, 1);
+    const id = generateNodeId(this.filePath, 'component', componentName, 1, 0);
 
     const node: Node = {
       id,

@@ -105,7 +105,7 @@ export class MyBatisExtractor {
 
   private createFileNode(): Node {
     const lines = this.source.split('\n');
-    const id = generateNodeId(this.filePath, 'file', this.filePath, 1);
+    const id = generateNodeId(this.filePath, 'file', this.filePath, 1, 0);
     const node: Node = {
       id,
       kind: 'file',
@@ -211,7 +211,7 @@ export class MyBatisExtractor {
       // the same node id, and `INSERT OR REPLACE INTO nodes` (id is the PRIMARY
       // KEY) would silently drop one. qualifiedName and startLine are stored
       // unchanged, so the Java↔XML suffix-match bridge is untouched.
-      const nodeId = generateNodeId(this.filePath, 'method', qualified, absoluteIndex);
+      const nodeId = generateNodeId(this.filePath, 'method', qualified, startLine, absoluteIndex);
       const node: Node = {
         id: nodeId,
         kind: 'method',
