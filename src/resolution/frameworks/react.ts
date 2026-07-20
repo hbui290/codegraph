@@ -114,8 +114,9 @@ export const reactResolver: FrameworkResolver = {
     const routeTagRegex = /<Route\b/g;
     let routeMatch: RegExpExecArray | null;
     while ((routeMatch = routeTagRegex.exec(content)) !== null) {
-      const nextRoute = content.indexOf('<Route', routeMatch.index + 6);
-      const window = content.slice(routeMatch.index, nextRoute === -1 ? content.length : nextRoute);
+      const tagEnd = reactRouteTagEnd(content, routeMatch.index);
+      if (tagEnd === -1) continue;
+      const window = content.slice(routeMatch.index, tagEnd);
       const pathMatch = window.match(/\bpath\s*=\s*["']([^"']+)["']/);
       if (!pathMatch) continue; // index/layout routes without a path
       const routePath = pathMatch[1]!;
@@ -230,6 +231,25 @@ export const reactResolver: FrameworkResolver = {
  */
 function isPascalCase(str: string): boolean {
   return /^[A-Z][a-zA-Z0-9]*$/.test(str);
+}
+
+/** Return the end of a Route opening tag, ignoring `>` inside JSX expressions. */
+function reactRouteTagEnd(content: string, start: number): number {
+  let braces = 0;
+  let quote: string | null = null;
+  let escaped = false;
+  for (let i = start + '<Route'.length; i < content.length; i++) {
+    const char = content[i]!;
+    if (quote) {
+      if (escaped) escaped = false;
+      else if (char === '\\') escaped = true;
+      else if (char === quote) quote = null;
+    } else if (char === '"' || char === "'") quote = char;
+    else if (char === '{') braces++;
+    else if (char === '}') braces = Math.max(0, braces - 1);
+    else if (char === '>' && braces === 0) return i + 1;
+  }
+  return -1;
 }
 
 /**

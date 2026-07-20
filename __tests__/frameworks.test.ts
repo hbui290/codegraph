@@ -1502,6 +1502,19 @@ describe('reactResolver.extract — React Router', () => {
     expect(routes[0]?.name).toBe('/x');
   });
 
+  it('does not take an element from a child JSX tag as the Route component (#1348)', () => {
+    const src = `<Route path="/parent"><Widget element={<Wrong/>}/></Route><Route path="/next" element={<Right/>}/>`;
+    const { nodes, references } = reactResolver.extract!('App.tsx', src);
+    expect(nodes.filter((node) => node.kind === 'route').map((node) => node.name)).toEqual(['/parent', '/next']);
+    expect(references.map((reference) => reference.referenceName)).toEqual(['Right']);
+  });
+
+  it('keeps scanning an opening Route tag past > in a quoted attribute (#1348)', () => {
+    const src = `<Route path="/x" aria-label="1 > 0" element={<X/>}/>`;
+    const { references } = reactResolver.extract!('App.tsx', src);
+    expect(references.map((reference) => reference.referenceName)).toEqual(['X']);
+  });
+
   it('extracts createBrowserRouter object routes ({ path, element/Component })', () => {
     const src = `const router = createBrowserRouter([
       { path: "/dashboard", element: <Dashboard /> },

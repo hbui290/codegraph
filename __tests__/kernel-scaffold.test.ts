@@ -32,6 +32,7 @@ const kernelBuilt = fs.existsSync(KERNEL_PATH);
 const expectKernel = process.env.CODEGRAPH_KERNEL_EXPECT === '1';
 
 const FIXTURE = [
+  '// café',
   'export class MathHelper {',
   '  calculateTotal(a: number): number { return helper(a); }',
   '}',
@@ -144,7 +145,9 @@ describe.skipIf(!kernelBuilt)('kernel scaffold', () => {
       const result = tryKernelExtract('src/utils.ts', FIXTURE, 'typescript')!;
       for (const n of result.nodes) {
         if (n.kind === 'file') continue;
-        expect(n.id).toBe(generateNodeId('src/utils.ts', n.kind, n.name, n.startLine));
+        const startOffset = FIXTURE.split('\n').slice(0, n.startLine - 1)
+          .reduce((offset, line) => offset + Buffer.byteLength(line) + 1, 0) + n.startColumn;
+        expect(n.id).toBe(generateNodeId('src/utils.ts', n.kind, n.name, n.startLine, startOffset));
       }
     });
 

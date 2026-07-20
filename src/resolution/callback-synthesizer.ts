@@ -22,6 +22,7 @@
  * tagged `provenance:'heuristic'`. See docs/design/callback-edge-synthesis.md.
  */
 import type { Edge, Node, NodeKind } from '../types';
+import * as path from 'path';
 import type { QueryBuilder } from '../db/queries';
 import type { ResolutionContext } from './types';
 import { isGeneratedFile } from '../extraction/generated-detection';
@@ -210,9 +211,19 @@ async function fieldChannelEdges(queries: QueryBuilder, ctx: ResolutionContext, 
       const line = ctx.readFile(caller.filePath)?.split('\n')[e.line - 1];
       const am = line?.match(argRe);
       if (!am) continue;
-      const fn = ctx.getNodesByName(am[1]!).find(
-        (n) => n.filePath === caller.filePath && (n.kind === 'method' || n.kind === 'function')
+      const callbackName = am[1]!;
+      const candidates = ctx.getNodesByName(callbackName).filter(
+        (n) => n.kind === 'method' || n.kind === 'function'
       );
+      const imported = ctx.getImportMappings(caller.filePath, caller.language).find(
+        (mapping) => mapping.localName === callbackName && mapping.source.startsWith('.')
+      );
+      const importedPath = imported && path.posix.normalize(
+        path.posix.join(path.posix.dirname(caller.filePath), imported.source)
+      );
+      const fn = (importedPath ? candidates.find(
+          (n) => n.filePath.replace(/\.[^.]+$/, '') === importedPath && n.name === imported!.exportedName
+        ) : undefined) ?? candidates.find((n) => n.filePath === caller.filePath);
       if (!fn) continue;
       for (const disp of chDispatchers) {
         if (disp.node.id === fn.id) continue;

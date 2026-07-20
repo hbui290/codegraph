@@ -1120,6 +1120,35 @@ describe('Callback synthesis target selection', () => {
       cg.close();
     }
   });
+
+  it('follows a named imported callback without selecting a same-named decoy (#1355)', async () => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'cg-callback-import-'));
+    fs.writeFileSync(path.join(tmpDir, 'decoy.ts'), 'export function triggerRender() {}\n');
+    fs.writeFileSync(path.join(tmpDir, 'handler.ts'), 'export function triggerRender() {}\n');
+    fs.writeFileSync(
+      path.join(tmpDir, 'store.ts'),
+      'export class Store {\n  handlers = new Set<() => void>();\n  subscribe(callback: () => void) { this.handlers.add(callback); }\n  emit() { this.handlers.forEach((handler) => handler()); }\n}\nexport const store = new Store();\n'
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, 'main.ts'),
+      "import { store } from './store'; import { triggerRender } from './handler'; class Local { triggerRender() {} } export function connect() { store.subscribe(triggerRender); }\n"
+    );
+
+    const cg = CodeGraph.initSync(tmpDir);
+    await cg.indexAll();
+    try {
+      const emit = cg.getNodesByName('emit').find((node) => node.filePath.endsWith('store.ts'));
+      const handler = cg.getNodesByName('triggerRender').find((node) => node.filePath.endsWith('handler.ts'));
+      const decoy = cg.getNodesByName('triggerRender').find((node) => node.filePath.endsWith('decoy.ts'));
+      const targets = cg.getOutgoingEdges(emit!.id)
+        .filter((edge) => (edge.metadata as { synthesizedBy?: string } | undefined)?.synthesizedBy === 'callback')
+        .map((edge) => edge.target);
+      expect(targets).toContain(handler!.id);
+      expect(targets).not.toContain(decoy!.id);
+    } finally {
+      cg.close();
+    }
+  });
 });
 
 describe('Terraform end-to-end module-boundary resolution', () => {
