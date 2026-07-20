@@ -22,9 +22,9 @@
  * tagged `provenance:'heuristic'`. See docs/design/callback-edge-synthesis.md.
  */
 import type { Edge, Node, NodeKind } from '../types';
-import * as path from 'path';
 import type { QueryBuilder } from '../db/queries';
-import type { ResolutionContext } from './types';
+import type { ResolutionContext, UnresolvedRef } from './types';
+import { resolveViaImport } from './import-resolver';
 import { isGeneratedFile } from '../extraction/generated-detection';
 import { stripCommentsForRegex } from './strip-comments';
 import { cFnPointerDispatchEdges } from './c-fnptr-synthesizer';
@@ -212,19 +212,25 @@ async function fieldChannelEdges(queries: QueryBuilder, ctx: ResolutionContext, 
       const am = line?.match(argRe);
       if (!am) continue;
       const callbackName = am[1]!;
-      const candidates = ctx.getNodesByName(callbackName).filter(
-        (n) => n.kind === 'method' || n.kind === 'function'
+      const isImported = ctx.getImportMappings(caller.filePath, caller.language).some(
+        (mapping) => mapping.localName === callbackName
       );
-      const imported = ctx.getImportMappings(caller.filePath, caller.language).find(
-        (mapping) => mapping.localName === callbackName && mapping.source.startsWith('.')
-      );
-      const importedPath = imported && path.posix.normalize(
-        path.posix.join(path.posix.dirname(caller.filePath), imported.source)
-      );
-      const fn = (importedPath ? candidates.find(
-          (n) => n.filePath.replace(/\.[^.]+$/, '') === importedPath && n.name === imported!.exportedName
-        ) : undefined) ?? candidates.find((n) => n.filePath === caller.filePath);
-      if (!fn) continue;
+      const fn = isImported
+        ? (() => {
+            const ref: UnresolvedRef = {
+              fromNodeId: caller.id,
+              referenceName: callbackName,
+              referenceKind: 'references',
+              line: e.line,
+              column: 0,
+              filePath: caller.filePath,
+              language: caller.language,
+            };
+            const resolved = resolveViaImport(ref, ctx);
+            return resolved ? queries.getNodeById(resolved.targetNodeId) : undefined;
+          })()
+        : ctx.getNodesByName(callbackName).find((n) => n.filePath === caller.filePath);
+      if (!fn || (fn.kind !== 'method' && fn.kind !== 'function')) continue;
       for (const disp of chDispatchers) {
         if (disp.node.id === fn.id) continue;
         const key = `${disp.node.id}>${fn.id}`;

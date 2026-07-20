@@ -1149,6 +1149,89 @@ describe('Callback synthesis target selection', () => {
       cg.close();
     }
   });
+
+  it('follows a default imported callback without selecting a same-named local method', async () => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'cg-callback-default-import-'));
+    fs.writeFileSync(path.join(tmpDir, 'handler.ts'), 'export default function triggerRender() {}\n');
+    fs.writeFileSync(
+      path.join(tmpDir, 'store.ts'),
+      'export class Store {\n  handlers = new Set<() => void>();\n  subscribe(callback: () => void) { this.handlers.add(callback); }\n  emit() { this.handlers.forEach((handler) => handler()); }\n}\nexport const store = new Store();\n'
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, 'main.ts'),
+      "import { store } from './store'; import triggerRender from './handler'; class Local { triggerRender() {} } export function connect() { store.subscribe(triggerRender); }\n"
+    );
+
+    const cg = CodeGraph.initSync(tmpDir);
+    await cg.indexAll();
+    try {
+      const emit = cg.getNodesByName('emit').find((node) => node.filePath.endsWith('store.ts'));
+      const handler = cg.getNodesByName('triggerRender').find((node) => node.filePath.endsWith('handler.ts'));
+      const local = cg.getNodesByName('triggerRender').find((node) => node.filePath.endsWith('main.ts'));
+      const targets = cg.getOutgoingEdges(emit!.id)
+        .filter((edge) => (edge.metadata as { synthesizedBy?: string } | undefined)?.synthesizedBy === 'callback')
+        .map((edge) => edge.target);
+      expect(targets).toContain(handler!.id);
+      expect(targets).not.toContain(local!.id);
+    } finally {
+      cg.close();
+    }
+  });
+
+  it('follows a barrel re-exported callback without selecting a same-named local method', async () => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'cg-callback-barrel-import-'));
+    fs.writeFileSync(path.join(tmpDir, 'handler.ts'), 'export default function triggerRender() {}\n');
+    fs.writeFileSync(path.join(tmpDir, 'events.ts'), "export { default as triggerRender } from './handler';\n");
+    fs.writeFileSync(
+      path.join(tmpDir, 'store.ts'),
+      'export class Store {\n  handlers = new Set<() => void>();\n  subscribe(callback: () => void) { this.handlers.add(callback); }\n  emit() { this.handlers.forEach((handler) => handler()); }\n}\nexport const store = new Store();\n'
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, 'main.ts'),
+      "import { store } from './store'; import { triggerRender } from './events'; class Local { triggerRender() {} } export function connect() { store.subscribe(triggerRender); }\n"
+    );
+
+    const cg = CodeGraph.initSync(tmpDir);
+    await cg.indexAll();
+    try {
+      const emit = cg.getNodesByName('emit').find((node) => node.filePath.endsWith('store.ts'));
+      const handler = cg.getNodesByName('triggerRender').find((node) => node.filePath.endsWith('handler.ts'));
+      const local = cg.getNodesByName('triggerRender').find((node) => node.filePath.endsWith('main.ts'));
+      const targets = cg.getOutgoingEdges(emit!.id)
+        .filter((edge) => (edge.metadata as { synthesizedBy?: string } | undefined)?.synthesizedBy === 'callback')
+        .map((edge) => edge.target);
+      expect(targets).toContain(handler!.id);
+      expect(targets).not.toContain(local!.id);
+    } finally {
+      cg.close();
+    }
+  });
+
+  it('does not fall back to a same-named local callback when an import is unresolved', async () => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'cg-callback-unresolved-import-'));
+    fs.writeFileSync(path.join(tmpDir, 'handler.ts'), 'export function differentName() {}\n');
+    fs.writeFileSync(
+      path.join(tmpDir, 'store.ts'),
+      'export class Store {\n  handlers = new Set<() => void>();\n  subscribe(callback: () => void) { this.handlers.add(callback); }\n  emit() { this.handlers.forEach((handler) => handler()); }\n}\nexport const store = new Store();\n'
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, 'main.ts'),
+      "import { store } from './store'; import { triggerRender } from './handler'; function triggerRender() {} export function connect() { store.subscribe(triggerRender); }\n"
+    );
+
+    const cg = CodeGraph.initSync(tmpDir);
+    await cg.indexAll();
+    try {
+      const emit = cg.getNodesByName('emit').find((node) => node.filePath.endsWith('store.ts'));
+      const local = cg.getNodesByName('triggerRender').find((node) => node.filePath.endsWith('main.ts'));
+      const targets = cg.getOutgoingEdges(emit!.id)
+        .filter((edge) => (edge.metadata as { synthesizedBy?: string } | undefined)?.synthesizedBy === 'callback')
+        .map((edge) => edge.target);
+      expect(targets).not.toContain(local!.id);
+    } finally {
+      cg.close();
+    }
+  });
 });
 
 describe('Terraform end-to-end module-boundary resolution', () => {
