@@ -18,6 +18,48 @@ import CodeGraph from '../src/index';
 import { LOW_CONFIDENCE_MARKER } from '../src/context';
 import { isDistinctiveIdentifier, scorePathRelevance, deriveProjectNameTokens } from '../src/search/query-utils';
 
+describe('exact-name frequency ranking (#982)', () => {
+  let testDir: string;
+  let cg: CodeGraph;
+
+  beforeEach(async () => {
+    testDir = fs.mkdtempSync(path.join(os.tmpdir(), 'codegraph-name-frequency-'));
+    for (const [file, source] of Object.entries({
+      'apps/desktop/statusbar/StatusBar.ts': 'export function renderStatusBar() { return "status"; }\n',
+      'apps/desktop/statusbar/StatusBarController.ts': 'export function refreshStatusBar() { return "status"; }\n',
+      'apps/desktop/context/ContextWindowMeter.ts': 'export function estimateContextWindow() { return 1; }\n',
+      'apps/desktop/context/format.ts': 'export function formatTokens() { return "tokens"; }\n',
+      'optional-skills/bodyfat/scripts/body_calc.py': 'def usage():\n    return "body"\n',
+      'optional-skills/nutrition/scripts/macro_calc.py': 'def usage():\n    return "macro"\n',
+    })) {
+      const target = path.join(testDir, file);
+      fs.mkdirSync(path.dirname(target), { recursive: true });
+      fs.writeFileSync(target, source);
+    }
+    cg = CodeGraph.initSync(testDir);
+    await cg.indexAll();
+  });
+
+  afterEach(() => {
+    cg?.destroy();
+    fs.rmSync(testDir, { recursive: true, force: true });
+  });
+
+  it('does not let a repeated exact name outrank corroborated files in a multi-word query', () => {
+    const results = cg.searchNodes('desktop status bar context window usage', { limit: 20 });
+    const files = results.map((result) => result.node.filePath);
+    const firstProduct = files.findIndex((file) => file.includes('apps/desktop/'));
+    const firstUsage = files.findIndex((file) => file.includes('optional-skills/'));
+    expect(firstProduct).toBeGreaterThanOrEqual(0);
+    expect(firstUsage).toBeGreaterThanOrEqual(0);
+    expect(firstProduct).toBeLessThan(firstUsage);
+  });
+
+  it('keeps a direct single-symbol lookup exact', () => {
+    expect(cg.searchNodes('usage', { limit: 2 }).every((result) => result.node.name === 'usage')).toBe(true);
+  });
+});
+
 describe('isDistinctiveIdentifier', () => {
   it('treats plain dictionary words as non-distinctive', () => {
     for (const word of ['flat', 'object', 'screen', 'standing', 'capture']) {

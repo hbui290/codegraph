@@ -21,6 +21,7 @@ import * as path from 'path';
 import * as os from 'os';
 import { CodeGraph } from '../src';
 import { ToolHandler } from '../src/mcp/tools';
+import { SERVER_INSTRUCTIONS } from '../src/mcp/server-instructions';
 
 const BIN = path.resolve(__dirname, '../dist/bin/codegraph.js');
 
@@ -92,6 +93,11 @@ describe('No-root-index session policy', () => {
 
   beforeEach(() => {
     tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'codegraph-unindexed-'));
+  });
+
+  it('asks agents to verify ambiguous cross-file edges in source (#765)', () => {
+    expect(SERVER_INSTRUCTIONS).toContain('ambiguous same-named cross-file symbol or edge, verify it in source');
+    expect(SERVER_INSTRUCTIONS).not.toContain("Trust codegraph's results — don't re-verify them with grep");
   });
 
   afterEach(async () => {

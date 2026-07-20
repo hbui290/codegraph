@@ -340,7 +340,11 @@ function matchesNonProductionDir(lowerPath: string): boolean {
  * Exact matches get the largest boost; prefix matches get smaller boosts.
  * Multi-word queries also check individual term matches against the name.
  */
-export function nameMatchBonus(nodeName: string, query: string): number {
+export function nameMatchBonus(
+  nodeName: string,
+  query: string,
+  exactNameCounts?: ReadonlyMap<string, number>
+): number {
   const nameLower = nodeName.toLowerCase();
 
   // Split query into word-level terms (handles "CacheBuilder build" → ["cache","builder","build"])
@@ -360,7 +364,10 @@ export function nameMatchBonus(nodeName: string, query: string): number {
   if (nameLower === queryLower) return 80;
 
   // Exact match on a query token: "CacheBuilder build" and node name is "build"
-  if (queryTokens.length > 1 && queryTokens.includes(nameLower)) return 60;
+  if (queryTokens.length > 1 && queryTokens.includes(nameLower)) {
+    const count = exactNameCounts?.get(nameLower) ?? 1;
+    return 60 / (count * count);
+  }
 
   // Name starts with query — scale by length ratio so "Pod"→"Pod" (exact, handled above)
   // scores much higher than "Pod"→"PodGCControllerOptions" (ratio 0.125).

@@ -1243,12 +1243,29 @@ export class QueryBuilder {
     // Apply multi-signal scoring
     if (results.length > 0 && (text || query)) {
       const scoringQuery = text || query;
+      const exactNameCounts = new Map<string, number>();
+      const tokens = [...new Set(scoringQuery.split(/\s+/).map((term) => term.toLowerCase()).filter((term) => term.length >= 2))];
+      if (tokens.length > 1) {
+        let sql = `SELECT lower(name) AS name, count(*) AS count FROM nodes WHERE lower(name) IN (${tokens.map(() => '?').join(',')})`;
+        const params: (string | number)[] = [...tokens];
+        if (kinds && kinds.length > 0) {
+          sql += ` AND kind IN (${kinds.map(() => '?').join(',')})`;
+          params.push(...kinds);
+        }
+        if (languages && languages.length > 0) {
+          sql += ` AND language IN (${languages.map(() => '?').join(',')})`;
+          params.push(...languages);
+        }
+        sql += ' GROUP BY lower(name)';
+        const rows = this.db.prepare(sql).all(...params) as Array<{ name: string; count: number }>;
+        for (const row of rows) exactNameCounts.set(row.name, row.count);
+      }
       results = results.map(r => ({
         ...r,
         score: r.score
           + kindBonus(r.node.kind)
           + scorePathRelevance(r.node.filePath, scoringQuery, this.projectNameTokens)
-          + nameMatchBonus(r.node.name, scoringQuery),
+          + nameMatchBonus(r.node.name, scoringQuery, exactNameCounts),
       }));
       results.sort((a, b) => b.score - a.score);
       // Trim to requested limit after rescoring
