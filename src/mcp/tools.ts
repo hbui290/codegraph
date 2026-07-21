@@ -6,7 +6,7 @@
 
 import type CodeGraph from '../index';
 import type { QueryPool } from './query-pool';
-import { findNearestCodeGraphRoot } from '../directory';
+import { canonicalRootKey, findNearestCodeGraphRoot } from '../directory';
 // Lazy-load the heavy CodeGraph chain off the MCP startup path — see the same
 // helper in engine.ts. ToolHandler must load to answer tools/list (static
 // schemas), but it must NOT drag in sqlite/query layers before the daemon binds;
@@ -1081,6 +1081,7 @@ export class ToolHandler {
         "Indexing is the user's decision — they can run 'codegraph init' in that project to enable it."
       );
     }
+    const rootKey = canonicalRootKey(resolvedRoot);
 
     // If the path resolves to the default project, reuse the already-open
     // default instance rather than opening a SECOND connection to the same DB.
@@ -1089,18 +1090,19 @@ export class ToolHandler {
     // support) that surfaces as intermittent
     // "database is locked" on concurrent tool calls. See issue #238. The
     // default instance is owned/closed by the server, so it's never cached.
-    if (this.cg && this.cg.getProjectRoot() === resolvedRoot) {
+    if (this.cg && canonicalRootKey(this.cg.getProjectRoot()) === rootKey) {
       return this.freshen(this.cg);
     }
 
-    // Cache the open DB connection by RESOLVED ROOT only — never by the input
-    // path. One key per instance means closeAll() closes each exactly once, and
-    // a changed resolution maps to a different entry instead of a stale hit.
-    const cached = this.projectCache.get(resolvedRoot);
+    // Cache the open DB connection by the resolved root's filesystem identity —
+    // never by the input path. One key per instance means closeAll() closes each
+    // exactly once, and a changed resolution maps to a different entry instead
+    // of a stale hit.
+    const cached = this.projectCache.get(rootKey);
     if (cached) return this.freshen(cached);
 
     const cg = loadCodeGraph().openSync(resolvedRoot);
-    this.projectCache.set(resolvedRoot, cg);
+    this.projectCache.set(rootKey, cg);
     return cg;
   }
 

@@ -155,6 +155,23 @@ export function unsafeIndexRootReason(projectRoot: string): string | null {
   return null;
 }
 
+function canonicalizeRoot(dir: string): string {
+  try {
+    return fs.realpathSync(dir);
+  } catch {
+    return dir;
+  }
+}
+
+export function canonicalRootKey(root: string): string {
+  try {
+    const stat = fs.statSync(root);
+    return `${stat.dev}:${stat.ino}`;
+  } catch {
+    return canonicalizeRoot(root);
+  }
+}
+
 export function findNearestCodeGraphRoot(startPath: string): string | null {
   let current = path.resolve(startPath);
   const root = path.parse(current).root;

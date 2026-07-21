@@ -31,6 +31,7 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixes
 
+- Path aliases for the same indexed project now reuse one MCP SQLite connection instead of opening competing handles.
 - TypeScript, TSX, and JavaScript files now parse with up-to-date grammars — modern syntax such as `using` declarations and import attributes no longer trips parse errors that could drop surrounding symbols. (The previously bundled grammars dated from 2023.)
 - Rust files also parse with an up-to-date grammar now (the previously bundled build dated from 2023), which additionally sharpens method-call attribution: calls through struct fields resolve with receiver context instead of falling back to ambiguous bare-name matching, removing a class of wrong call edges on common names like `len` and `start`.
 - Searching or exploring by field names now finds the code that defines them. A query made of object keys or API field names (`profileInfo isTrialEligible quotaInfo billingMethod`) used to return unrelated results while the defining files never appeared, because three retrieval steps each dropped multi-word camelCase terms: an internal case-comparison bug, a match step that only considered classes (never functions or methods), and exploration seeding that required exact symbol-name matches. All three are fixed — `codegraph_explore` with a bag of field names now surfaces the controllers and services that assemble those fields. (#1196)
