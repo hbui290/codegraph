@@ -112,7 +112,7 @@ describe('MCP initialize handshake (issue #172)', () => {
     if (child) {
       const exited = new Promise<void>((resolve) => child!.once('exit', () => resolve()));
       child.kill('SIGKILL');
-      const didExit = child.exitCode !== null || await Promise.race([
+      const didExit = child.exitCode !== null || child.signalCode !== null || await Promise.race([
         exited.then(() => true),
         new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 3000)),
       ]);

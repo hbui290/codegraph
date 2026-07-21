@@ -13,6 +13,7 @@
 import * as os from 'os';
 import type CodeGraph from '../index';
 import { findNearestCodeGraphRoot } from '../directory';
+import { validateProjectPath } from '../utils';
 import { watchDisabledReason } from '../sync';
 import { ToolHandler } from './tools';
 import { QueryPool, resolvePoolSize } from './query-pool';
@@ -160,6 +161,11 @@ export class MCPEngine {
     this.toolHandler.setDefaultProjectHint(searchFrom);
     const resolvedRoot = findNearestCodeGraphRoot(searchFrom);
     if (!resolvedRoot) return;
+    const pathError = validateProjectPath(resolvedRoot);
+    if (pathError) {
+      process.stderr.write(`[CodeGraph MCP] Refusing to open project at ${resolvedRoot}: ${pathError}\n`);
+      return;
+    }
     try {
       // Close any previously failed instance to avoid leaking resources.
       if (this.cg) {
@@ -205,6 +211,12 @@ export class MCPEngine {
     if (!resolvedRoot) {
       // No .codegraph/ above searchFrom. Sessions may still discover one later via roots/list
       this.projectPath = searchFrom;
+      return;
+    }
+
+    const pathError = validateProjectPath(resolvedRoot);
+    if (pathError) {
+      process.stderr.write(`[CodeGraph MCP] Refusing to open project at ${resolvedRoot}: ${pathError}\n`);
       return;
     }
 
