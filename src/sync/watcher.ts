@@ -735,7 +735,11 @@ export class FileWatcher {
     if (IS_TEST_RUNTIME) {
       const key = liveWatcherKeysForTests.get(this);
       if (key) {
-        liveWatchersForTests.delete(key);
+        // A newer watcher for the same root can have replaced this one. Never
+        // let an older stop() unregister that active watcher.
+        if (liveWatchersForTests.get(key) === this) {
+          liveWatchersForTests.delete(key);
+        }
         liveWatcherKeysForTests.delete(this);
       }
     }

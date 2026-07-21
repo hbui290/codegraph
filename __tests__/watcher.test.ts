@@ -112,6 +112,22 @@ describe('FileWatcher', () => {
 
       expect(watcher.isActive()).toBe(false);
     });
+
+    it('keeps the newer synthetic-event registration when an older watcher stops', () => {
+      const older = newWatcher(vi.fn().mockResolvedValue({ filesChanged: 0, durationMs: 0 }));
+      const newer = newWatcher(vi.fn().mockResolvedValue({ filesChanged: 0, durationMs: 0 }));
+      try {
+        expect(older.start()).toBe(true);
+        expect(newer.start()).toBe(true);
+
+        older.stop();
+
+        expect(__emitWatchEventForTests(testDir, 'src/index.ts')).toBe(true);
+      } finally {
+        older.stop();
+        newer.stop();
+      }
+    });
   });
 
   describe('watch-resource exhaustion (#876)', () => {
