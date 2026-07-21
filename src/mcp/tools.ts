@@ -1046,6 +1046,9 @@ export class ToolHandler {
           'other indexed projects by projectPath in the same session.'
         );
       }
+      if (this.cg.getProjectRoot() !== canonicalRootKey(this.cg.getProjectRoot())) {
+        throw new Error('The default CodeGraph project root is not canonical; reconnect the MCP server.');
+      }
       return this.freshen(this.cg);
     }
 
@@ -1090,7 +1093,7 @@ export class ToolHandler {
     // support) that surfaces as intermittent
     // "database is locked" on concurrent tool calls. See issue #238. The
     // default instance is owned/closed by the server, so it's never cached.
-    if (this.cg && canonicalRootKey(this.cg.getProjectRoot()) === rootKey) {
+    if (this.cg && this.cg.getProjectRoot() === rootKey) {
       return this.freshen(this.cg);
     }
 

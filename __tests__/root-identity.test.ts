@@ -47,11 +47,8 @@ describe('filesystem root identity', () => {
     fs.rmSync(tempDir, { recursive: true, force: true });
   });
 
-  it('keeps distinct roots distinct and resolves an unstatable path', () => {
+  it('keeps distinct roots distinct', () => {
     expect(canonicalRootKey(rootA)).not.toBe(canonicalRootKey(rootB));
-
-    const missingRoot = path.relative(process.cwd(), path.join(tempDir, 'missing'));
-    expect(canonicalRootKey(missingRoot)).toBe(path.resolve(missingRoot));
   });
 
   it('canonicalizes aliases while preserving root discovery spelling', (context) => {
@@ -102,6 +99,34 @@ describe('filesystem root identity', () => {
       openSpy.mockRestore();
       defaultCg.close();
     }
+  });
+
+  it('keeps a default opened through an alias on its original root after retargeting', (context) => {
+    if (!hasSymlink) {
+      context.skip();
+      return;
+    }
+
+    const defaultCg = CodeGraph.openSync(aliasRoot);
+    const handler = new ToolHandler(defaultCg);
+    try {
+      fs.unlinkSync(aliasRoot);
+      fs.symlinkSync(rootB, aliasRoot, process.platform === 'win32' ? 'junction' : 'dir');
+
+      const resolved = (handler as any).getCodeGraph() as CodeGraph;
+      expect(resolved).toBe(defaultCg);
+      expect(fs.realpathSync(resolved.getProjectRoot())).toBe(fs.realpathSync(rootA));
+      expect(resolved.getProjectRoot()).toBe(fs.realpathSync(rootA));
+    } finally {
+      defaultCg.close();
+    }
+  });
+
+  it('fails closed when a root cannot be canonicalized', () => {
+    const missingRoot = path.join(tempDir, 'missing');
+    expect(() => canonicalRootKey(missingRoot)).toThrow(
+      `Could not resolve canonical CodeGraph project root at ${missingRoot}`
+    );
   });
 
   it('does not retarget a cached project when its original alias changes', (context) => {

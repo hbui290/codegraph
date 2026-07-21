@@ -32,6 +32,7 @@ import {
   createDirectory,
   removeDirectory,
   validateDirectory,
+  canonicalRootKey,
 } from './directory';
 import {
   ExtractionOrchestrator,
@@ -258,13 +259,14 @@ export class CodeGraph {
 
     // Create directory structure
     createDirectory(resolvedRoot);
+    const canonicalRoot = canonicalRootKey(resolvedRoot);
 
     // Initialize database
-    const dbPath = getDatabasePath(resolvedRoot);
+    const dbPath = getDatabasePath(canonicalRoot);
     const db = DatabaseConnection.initialize(dbPath);
     const queries = new QueryBuilder(db.getDb());
 
-    const instance = new CodeGraph(db, queries, resolvedRoot);
+    const instance = new CodeGraph(db, queries, canonicalRoot);
 
     // Run initial indexing if requested
     if (options.index) {
@@ -287,13 +289,14 @@ export class CodeGraph {
 
     // Create directory structure
     createDirectory(resolvedRoot);
+    const canonicalRoot = canonicalRootKey(resolvedRoot);
 
     // Initialize database
-    const dbPath = getDatabasePath(resolvedRoot);
+    const dbPath = getDatabasePath(canonicalRoot);
     const db = DatabaseConnection.initialize(dbPath);
     const queries = new QueryBuilder(db.getDb());
 
-    return new CodeGraph(db, queries, resolvedRoot);
+    return new CodeGraph(db, queries, canonicalRoot);
   }
 
   /**
@@ -311,19 +314,20 @@ export class CodeGraph {
     if (!isInitialized(resolvedRoot)) {
       throw new Error(`CodeGraph not initialized in ${resolvedRoot}. Run init() first.`);
     }
+    const canonicalRoot = canonicalRootKey(resolvedRoot);
 
     // Validate directory structure
-    const validation = validateDirectory(resolvedRoot);
+    const validation = validateDirectory(canonicalRoot);
     if (!validation.valid) {
       throw new Error(`Invalid CodeGraph directory: ${validation.errors.join(', ')}`);
     }
 
     // Open database
-    const dbPath = getDatabasePath(resolvedRoot);
+    const dbPath = getDatabasePath(canonicalRoot);
     const db = DatabaseConnection.open(dbPath);
     const queries = new QueryBuilder(db.getDb());
 
-    const instance = new CodeGraph(db, queries, resolvedRoot);
+    const instance = new CodeGraph(db, queries, canonicalRoot);
 
     // Sync if requested
     if (options.sync) {
@@ -358,8 +362,9 @@ export class CodeGraph {
     if (!isInitialized(resolvedRoot)) {
       throw new Error(`CodeGraph not initialized in ${resolvedRoot}. Run init() first.`);
     }
+    const canonicalRoot = canonicalRootKey(resolvedRoot);
 
-    const dbPath = getDatabasePath(resolvedRoot);
+    const dbPath = getDatabasePath(canonicalRoot);
     try {
       removeDatabaseFiles(dbPath);
     } catch (err) {
@@ -370,7 +375,7 @@ export class CodeGraph {
       throw new Error(
         `Could not rebuild the index — the database file is in use (${reason}). ` +
           `Stop any running CodeGraph MCP server/daemon for this project and retry, ` +
-          `or remove the ${getCodeGraphDir(resolvedRoot)} directory and run "codegraph init".`
+          `or remove the ${getCodeGraphDir(canonicalRoot)} directory and run "codegraph init".`
       );
     }
 
@@ -378,7 +383,7 @@ export class CodeGraph {
     const db = DatabaseConnection.initialize(dbPath);
     const queries = new QueryBuilder(db.getDb());
 
-    return new CodeGraph(db, queries, resolvedRoot);
+    return new CodeGraph(db, queries, canonicalRoot);
   }
 
   /**
@@ -391,19 +396,20 @@ export class CodeGraph {
     if (!isInitialized(resolvedRoot)) {
       throw new Error(`CodeGraph not initialized in ${resolvedRoot}. Run init() first.`);
     }
+    const canonicalRoot = canonicalRootKey(resolvedRoot);
 
     // Validate directory structure
-    const validation = validateDirectory(resolvedRoot);
+    const validation = validateDirectory(canonicalRoot);
     if (!validation.valid) {
       throw new Error(`Invalid CodeGraph directory: ${validation.errors.join(', ')}`);
     }
 
     // Open database
-    const dbPath = getDatabasePath(resolvedRoot);
+    const dbPath = getDatabasePath(canonicalRoot);
     const db = DatabaseConnection.open(dbPath);
     const queries = new QueryBuilder(db.getDb());
 
-    return new CodeGraph(db, queries, resolvedRoot);
+    return new CodeGraph(db, queries, canonicalRoot);
   }
 
   /**

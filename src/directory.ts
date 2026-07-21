@@ -158,8 +158,11 @@ export function unsafeIndexRootReason(projectRoot: string): string | null {
 export function canonicalRootKey(root: string): string {
   try {
     return fs.realpathSync(root);
-  } catch {
-    return path.resolve(root);
+  } catch (err) {
+    const reason = err instanceof Error ? err.message : String(err);
+    throw new Error(
+      `Could not resolve canonical CodeGraph project root at ${path.resolve(root)}: ${reason}`
+    );
   }
 }
 
