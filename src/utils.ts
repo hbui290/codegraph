@@ -157,19 +157,50 @@ export function validatePathWithinRoot(
  */
 export function validateProjectPath(dirPath: string): string | null {
   const resolved = path.resolve(dirPath);
+  let canonical = resolved;
+  try {
+    canonical = fs.realpathSync(resolved);
+  } catch {
+    // The directory check below reports a missing or inaccessible path. Keep
+    // lexical validation so callers that only need parent-root discovery do
+    // not lose their existing behaviour.
+  }
 
-  // Block sensitive system directories
-  if (SENSITIVE_PATHS.has(resolved) || SENSITIVE_PATHS.has(resolved.toLowerCase())) {
-    return `Refusing to operate on sensitive system directory: ${resolved}`;
+  const candidates = [resolved, canonical];
+  const sensitiveSystemPaths = new Set<string>();
+  for (const sensitivePath of SENSITIVE_PATHS) {
+    const lexical = path.resolve(sensitivePath);
+    sensitiveSystemPaths.add(lexical);
+    try {
+      sensitiveSystemPaths.add(fs.realpathSync(lexical));
+    } catch {
+      // A platform-specific path may not exist on this host.
+    }
+  }
+
+  // Check canonical identity as well as spelling: a symlink to /etc (which is
+  // /private/etc on macOS) must not bypass the lexical refusal.
+  if (candidates.some((candidate) =>
+    sensitiveSystemPaths.has(candidate) || sensitiveSystemPaths.has(candidate.toLowerCase())
+  )) {
+    return `Refusing to operate on sensitive system directory: ${canonical}`;
   }
 
   // Also block common sensitive home subdirectories
   const homeDir = require('os').homedir();
   const sensitiveHomeDirs = ['.ssh', '.gnupg', '.aws', '.config'];
   for (const dir of sensitiveHomeDirs) {
-    const sensitivePath = path.join(homeDir, dir);
-    if (resolved === sensitivePath || resolved.startsWith(sensitivePath + path.sep)) {
-      return `Refusing to operate on sensitive directory: ${resolved}`;
+    const sensitivePath = path.resolve(homeDir, dir);
+    let canonicalSensitivePath = sensitivePath;
+    try {
+      canonicalSensitivePath = fs.realpathSync(sensitivePath);
+    } catch {
+      // Missing optional home directories remain guarded lexically.
+    }
+    if (candidates.some((candidate) =>
+      isWithinDir(candidate, sensitivePath) || isWithinDir(candidate, canonicalSensitivePath)
+    )) {
+      return `Refusing to operate on sensitive directory: ${canonical}`;
     }
   }
 

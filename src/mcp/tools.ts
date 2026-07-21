@@ -1081,6 +1081,10 @@ export class ToolHandler {
         "Indexing is the user's decision — they can run 'codegraph init' in that project to enable it."
       );
     }
+    const rootPathError = validateProjectPath(resolvedRoot);
+    if (rootPathError) {
+      throw new PathRefusalError(rootPathError);
+    }
     const rootKey = canonicalRootKey(resolvedRoot);
 
     // If the path resolves to the default project, reuse the already-open

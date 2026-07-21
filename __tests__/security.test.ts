@@ -306,6 +306,17 @@ describe('validateProjectPath — sensitive directory blocking', () => {
     expect(validateProjectPath('/etc')).toMatch(/sensitive system directory/i);
   });
 
+  it.runIf(process.platform !== 'win32')('blocks a symlink whose canonical target is /etc', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cg-sensitive-link-'));
+    const alias = path.join(dir, 'etc-alias');
+    try {
+      fs.symlinkSync('/etc', alias, 'dir');
+      expect(validateProjectPath(alias)).toMatch(/sensitive system directory/i);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it('allows a normal, existing directory', () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cg-validate-'));
     try {
