@@ -39,8 +39,10 @@ directly to the live watcher and do not use this registry.
 
 `CodeGraph.getProjectRoot()` continues to return the canonical root established
 by `init`, `open`, and `openSync`. The foundation assertion must compare against
-`canonicalRootKey(tempDir)`, making the intended contract explicit and portable
-across macOS path aliases.
+`fs.realpathSync(tempDir)`, making the intended contract explicit and portable
+across macOS path aliases. The expected value deliberately uses Node's native
+filesystem primitive rather than the production `canonicalRootKey` helper, so
+the test does not merely repeat the implementation under test.
 
 ### Test-only watch-event lookup canonicalizes its input
 
