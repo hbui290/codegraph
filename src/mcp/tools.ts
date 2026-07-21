@@ -1046,9 +1046,6 @@ export class ToolHandler {
           'other indexed projects by projectPath in the same session.'
         );
       }
-      if (this.cg.getProjectRoot() !== canonicalRootKey(this.cg.getProjectRoot())) {
-        throw new Error('The default CodeGraph project root is not canonical; reconnect the MCP server.');
-      }
       return this.freshen(this.cg);
     }
 
