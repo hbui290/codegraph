@@ -390,6 +390,16 @@ describe('FileWatcher', () => {
   });
 
   describe('debounced sync', () => {
+    it('finds an inert watcher through a lexical root alias', () => {
+      const canonicalRoot = fs.realpathSync(testDir);
+      const syncFn = vi.fn().mockResolvedValue({ filesChanged: 0, durationMs: 0 });
+      const watcher = new FileWatcher(canonicalRoot, syncFn, { inertForTests: true });
+      expect(watcher.start()).toBe(true);
+      expect(__emitWatchEventForTests(testDir, 'src/index.ts')).toBe(true);
+      expect(watcher.getPendingFiles().map((entry) => entry.path)).toContain('src/index.ts');
+      watcher.stop();
+    });
+
     it('should trigger sync after file change', async () => {
       const syncFn = vi.fn().mockResolvedValue({ filesChanged: 1, durationMs: 10 });
       const watcher = newWatcher(syncFn, { debounceMs: 200 });

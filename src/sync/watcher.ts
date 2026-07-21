@@ -154,6 +154,14 @@ function maxDirWatches(): number {
 const liveWatchersForTests = new Map<string, FileWatcher>();
 const IS_TEST_RUNTIME = !!(process.env.VITEST || process.env.NODE_ENV === 'test');
 
+function testWatcherRootKey(projectRoot: string): string | null {
+  try {
+    return fs.realpathSync(projectRoot);
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Options for the file watcher
  */
@@ -381,7 +389,10 @@ export class FileWatcher {
       this.ready = true;
       for (const cb of this.readyWaiters) cb();
       this.readyWaiters.length = 0;
-      if (IS_TEST_RUNTIME) liveWatchersForTests.set(this.projectRoot, this);
+      if (IS_TEST_RUNTIME) {
+        const key = testWatcherRootKey(this.projectRoot);
+        if (key) liveWatchersForTests.set(key, this);
+      }
 
       logDebug('File watcher started', {
         projectRoot: this.projectRoot,
@@ -717,7 +728,10 @@ export class FileWatcher {
     this.pendingFiles.clear();
     this.ready = false;
     this.ignoreMatcher = null;
-    if (IS_TEST_RUNTIME) liveWatchersForTests.delete(this.projectRoot);
+    if (IS_TEST_RUNTIME) {
+      const key = testWatcherRootKey(this.projectRoot);
+      if (key) liveWatchersForTests.delete(key);
+    }
     logDebug('File watcher stopped');
   }
 
@@ -937,7 +951,9 @@ export class FileWatcher {
  * test runtime, where the registry is intentionally not populated).
  */
 export function __emitWatchEventForTests(projectRoot: string, relPath: string): boolean {
-  const w = liveWatchersForTests.get(projectRoot);
+  const key = testWatcherRootKey(projectRoot);
+  if (!key) return false;
+  const w = liveWatchersForTests.get(key);
   if (!w) return false;
   w.ingestEventForTests(relPath);
   return true;
