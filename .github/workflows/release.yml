@@ -135,6 +135,8 @@ jobs:
           git push origin "HEAD:${GITHUB_REF#refs/heads/}"
 
       - run: npm ci
+      - name: Full test gate against a fresh runtime build
+        run: npm test
       - name: Ensure zip/unzip
         run: sudo apt-get update -qq && sudo apt-get install -y -qq zip unzip
 
