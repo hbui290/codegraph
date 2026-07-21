@@ -256,6 +256,7 @@ function makeDeps(
     warn: (m) => calls.logs.push(m),
     error: (m) => calls.errors.push(m),
     platform: overrides.platform ?? 'linux',
+    forkUpdatesDisabled: false,
   };
   return { deps, calls };
 }
@@ -268,6 +269,17 @@ function decodeEncodedCommand(args: string[]): string {
 }
 
 describe('runUpgrade', () => {
+  it('refuses to replace a verified personal fork with upstream', async () => {
+    const { deps, calls } = makeDeps({ method: { kind: 'npm', scope: 'global' }, currentVersion: '0.9.8' });
+    (deps as UpgradeDeps & { forkUpdatesDisabled: boolean }).forkUpdatesDisabled = true;
+
+    const code = await runUpgrade({}, deps);
+
+    expect(code).toBe(1);
+    expect(calls.runs).toHaveLength(0);
+    expect(calls.errors.join('\n')).toMatch(/verified personal fork/i);
+  });
+
   it('does nothing when already up to date', async () => {
     const { deps, calls } = makeDeps({ method: { kind: 'npm', scope: 'global' }, currentVersion: '0.9.9' });
     const code = await runUpgrade({}, deps);

@@ -31,7 +31,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { resolveLatestVersion, isUpdateAvailable, parseSemver } from './index';
+import { FORK_UPDATES_DISABLED, resolveLatestVersion, isUpdateAvailable, parseSemver } from './index';
 import { CodeGraphPackageVersion } from '../mcp/version';
 
 /** Re-check the release feed after this long (successful checks). */
@@ -57,6 +57,8 @@ export interface UpdateCheckDeps {
   now?: () => number;
   resolveLatest?: () => Promise<string>;
   currentVersion?: string;
+  /** A verified fork must not advertise an upstream update path. */
+  forkUpdatesDisabled?: boolean;
 }
 
 interface ResolvedDeps {
@@ -65,6 +67,7 @@ interface ResolvedDeps {
   now: () => number;
   resolveLatest: () => Promise<string>;
   currentVersion: string;
+  forkUpdatesDisabled: boolean;
 }
 
 function resolveDeps(deps: UpdateCheckDeps = {}): ResolvedDeps {
@@ -75,6 +78,7 @@ function resolveDeps(deps: UpdateCheckDeps = {}): ResolvedDeps {
     resolveLatest:
       deps.resolveLatest ?? (() => resolveLatestVersion(undefined, UPDATE_CHECK_NETWORK_TIMEOUT_MS)),
     currentVersion: deps.currentVersion ?? CodeGraphPackageVersion,
+    forkUpdatesDisabled: deps.forkUpdatesDisabled ?? FORK_UPDATES_DISABLED,
   };
 }
 
@@ -86,8 +90,11 @@ function envTruthy(raw: string | undefined): boolean {
  * True when the update check must not run at all — no network call, no
  * notice. `DO_NOT_TRACK` uses the same truthiness the telemetry opt-out does.
  */
-export function updateCheckDisabled(env: NodeJS.ProcessEnv = process.env): boolean {
-  return envTruthy(env.CODEGRAPH_NO_UPDATE_CHECK) || envTruthy(env.DO_NOT_TRACK);
+export function updateCheckDisabled(
+  env: NodeJS.ProcessEnv = process.env,
+  forkUpdatesDisabled = false,
+): boolean {
+  return forkUpdatesDisabled || envTruthy(env.CODEGRAPH_NO_UPDATE_CHECK) || envTruthy(env.DO_NOT_TRACK);
 }
 
 export function updateCheckCachePath(dir: string): string {
@@ -167,7 +174,7 @@ function cacheIsFresh(cache: UpdateCheckCacheFile | null, nowMs: number): boolea
  */
 export async function refreshUpdateCheck(deps: UpdateCheckDeps = {}): Promise<string | null> {
   const d = resolveDeps(deps);
-  if (updateCheckDisabled(d.env)) return null;
+  if (updateCheckDisabled(d.env, d.forkUpdatesDisabled)) return null;
 
   const cached = readUpdateCheckCache(d.dir);
   const nowMs = d.now();
@@ -208,7 +215,7 @@ let noticeMemo: { at: number; value: string | null } | null = null;
  */
 export function getUpdateNotice(deps: UpdateCheckDeps = {}): string | null {
   const d = resolveDeps(deps);
-  if (updateCheckDisabled(d.env)) return null;
+  if (updateCheckDisabled(d.env, d.forkUpdatesDisabled)) return null;
 
   const useMemo = deps.dir === undefined && deps.now === undefined;
   const nowMs = d.now();

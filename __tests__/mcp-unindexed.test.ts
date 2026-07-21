@@ -110,7 +110,13 @@ describe('No-root-index session policy', () => {
       // removal keeps this suite green on Windows.
       const exited = new Promise<void>((resolve) => child!.once('exit', () => resolve()));
       child.kill('SIGKILL');
-      await Promise.race([exited, new Promise((r) => setTimeout(r, 3000))]);
+      const didExit = child.exitCode !== null || await Promise.race([
+        exited.then(() => true),
+        new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 3000)),
+      ]);
+      if (!didExit) {
+        throw new Error(`MCP test server (pid ${child.pid}) did not exit after SIGKILL`);
+      }
       child = null;
     }
     fs.rmSync(tempDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });

@@ -32,6 +32,8 @@ import { ansiColorsEnabled } from '../ui/color';
 
 export const REPO = 'colbymchenry/codegraph';
 export const NPM_PACKAGE = '@colbymchenry/codegraph';
+/** This personal fork is installed from a verified commit, not upstream npm. */
+export const FORK_UPDATES_DISABLED = true;
 const RAW_BASE = `https://raw.githubusercontent.com/${REPO}/main`;
 export const INSTALL_SH_URL = `${RAW_BASE}/install.sh`;
 
@@ -297,6 +299,8 @@ export interface UpgradeDeps {
   warn: (msg: string) => void;
   error: (msg: string) => void;
   platform: NodeJS.Platform;
+  /** Override only for tests or an explicitly supported downstream channel. */
+  forkUpdatesDisabled?: boolean;
   /**
    * Offer the one-time CodeGraph Pro beta opt-in after a successful update
    * (see installer/beta-signup — self-gating: TTY only, and silent forever
@@ -332,6 +336,11 @@ export function reindexAdvisory(): string {
  */
 export async function runUpgrade(opts: UpgradeOptions, deps: UpgradeDeps): Promise<number> {
   const { currentVersion, method } = deps;
+
+  if (deps.forkUpdatesDisabled ?? FORK_UPDATES_DISABLED) {
+    deps.error('This is a verified personal fork; `codegraph upgrade` is disabled to prevent replacing it with upstream. Update from the verified fork checkout or tarball instead.');
+    return 1;
+  }
 
   // Resolve the target version (pinned or latest).
   let latest: string;

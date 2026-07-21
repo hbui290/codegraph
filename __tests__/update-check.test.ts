@@ -45,6 +45,7 @@ describe('update check (#1243)', () => {
     env: {} as NodeJS.ProcessEnv,
     now: () => T0,
     currentVersion: '1.4.0',
+    forkUpdatesDisabled: false,
     resolveLatest: async () => 'v1.5.0',
     ...over,
   });
@@ -152,6 +153,17 @@ describe('update check (#1243)', () => {
   });
 
   describe('opt-out', () => {
+    it('does not check upstream releases for a verified personal fork', async () => {
+      let calls = 0;
+      const d = deps({
+        forkUpdatesDisabled: true,
+        resolveLatest: async () => { calls++; return 'v1.5.0'; },
+      });
+      expect(await refreshUpdateCheck(d)).toBeNull();
+      expect(getUpdateNotice(d)).toBeNull();
+      expect(calls).toBe(0);
+    });
+
     it.each([
       ['CODEGRAPH_NO_UPDATE_CHECK', '1'],
       ['DO_NOT_TRACK', '1'],
