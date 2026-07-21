@@ -85,7 +85,7 @@ describe('CodeGraph Foundation', () => {
 
       // Then open
       const cg2 = CodeGraph.openSync(tempDir);
-      expect(cg2.getProjectRoot()).toBe(path.resolve(tempDir));
+      expect(cg2.getProjectRoot()).toBe(fs.realpathSync(tempDir));
       cg2.close();
     });
 
