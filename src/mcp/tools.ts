@@ -1094,14 +1094,13 @@ export class ToolHandler {
       return this.freshen(this.cg);
     }
 
-    // Cache the open DB connection by the resolved root's filesystem identity —
-    // never by the input path. One key per instance means closeAll() closes each
-    // exactly once, and a changed resolution maps to a different entry instead
-    // of a stale hit.
+    // Cache and open by canonical resolved root — never by the mutable input
+    // spelling. One key per instance means closeAll() closes each exactly once,
+    // and a retargeted alias cannot move an existing instance to another root.
     const cached = this.projectCache.get(rootKey);
     if (cached) return this.freshen(cached);
 
-    const cg = loadCodeGraph().openSync(resolvedRoot);
+    const cg = loadCodeGraph().openSync(rootKey);
     this.projectCache.set(rootKey, cg);
     return cg;
   }

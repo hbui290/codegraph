@@ -155,20 +155,11 @@ export function unsafeIndexRootReason(projectRoot: string): string | null {
   return null;
 }
 
-function canonicalizeRoot(dir: string): string {
-  try {
-    return fs.realpathSync(dir);
-  } catch {
-    return dir;
-  }
-}
-
 export function canonicalRootKey(root: string): string {
   try {
-    const stat = fs.statSync(root);
-    return `${stat.dev}:${stat.ino}`;
+    return fs.realpathSync(root);
   } catch {
-    return canonicalizeRoot(root);
+    return path.resolve(root);
   }
 }
 
