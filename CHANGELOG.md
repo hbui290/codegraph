@@ -9,6 +9,10 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Security
+
+- Updated the Cargo-workspace glob dependency to address a reachable security vulnerability.
+
 ### New Features
 
 - Indexing TypeScript, TSX, JavaScript, JSX, Java, Python, Go, C, C++, and Rust projects is faster: parsing and symbol extraction now run in a native engine when a prebuilt binary is available for your platform (release bundles include one), producing exactly the same graph — verified byte-for-byte against the previous engine on real repositories, from small libraries up to vscode-, dubbo-, django-, git-, protobuf-, tokio-, and rust-analyzer-scale codebases (Lombok-generated members, C function-pointer tables, and Unreal-Engine-style macro-heavy headers included; CUDA and Metal sources ride the C++ path). The speedup is largest on resource-constrained machines like CI runners. No setup needed: platforms without the native binary, and individual files with syntax errors, automatically use the previous engine, and `CODEGRAPH_KERNEL=0` turns the native path off entirely.
