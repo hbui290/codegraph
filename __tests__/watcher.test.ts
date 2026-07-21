@@ -400,6 +400,18 @@ describe('FileWatcher', () => {
       watcher.stop();
     });
 
+    it('removes an inert watcher registration when its root disappears before stop', () => {
+      const syncFn = vi.fn().mockResolvedValue({ filesChanged: 0, durationMs: 0 });
+      const watcher = newWatcher(syncFn);
+      expect(watcher.start()).toBe(true);
+
+      fs.rmSync(testDir, { recursive: true, force: true });
+      watcher.stop();
+      fs.mkdirSync(testDir);
+
+      expect(__emitWatchEventForTests(testDir, 'src/index.ts')).toBe(false);
+    });
+
     it('should trigger sync after file change', async () => {
       const syncFn = vi.fn().mockResolvedValue({ filesChanged: 1, durationMs: 10 });
       const watcher = newWatcher(syncFn, { debounceMs: 200 });

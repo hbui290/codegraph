@@ -152,6 +152,7 @@ function maxDirWatches(): number {
  * a test runner, so production carries no bookkeeping or retained references.
  */
 const liveWatchersForTests = new Map<string, FileWatcher>();
+const liveWatcherKeysForTests = new WeakMap<FileWatcher, string>();
 const IS_TEST_RUNTIME = !!(process.env.VITEST || process.env.NODE_ENV === 'test');
 
 function testWatcherRootKey(projectRoot: string): string | null {
@@ -391,7 +392,10 @@ export class FileWatcher {
       this.readyWaiters.length = 0;
       if (IS_TEST_RUNTIME) {
         const key = testWatcherRootKey(this.projectRoot);
-        if (key) liveWatchersForTests.set(key, this);
+        if (key) {
+          liveWatchersForTests.set(key, this);
+          liveWatcherKeysForTests.set(this, key);
+        }
       }
 
       logDebug('File watcher started', {
@@ -729,8 +733,11 @@ export class FileWatcher {
     this.ready = false;
     this.ignoreMatcher = null;
     if (IS_TEST_RUNTIME) {
-      const key = testWatcherRootKey(this.projectRoot);
-      if (key) liveWatchersForTests.delete(key);
+      const key = liveWatcherKeysForTests.get(this);
+      if (key) {
+        liveWatchersForTests.delete(key);
+        liveWatcherKeysForTests.delete(this);
+      }
     }
     logDebug('File watcher stopped');
   }
