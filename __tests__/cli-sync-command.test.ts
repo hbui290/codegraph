@@ -8,9 +8,9 @@ import { FileLock } from '../src/utils';
 
 const BIN = path.resolve(__dirname, '../dist/bin/codegraph.js');
 
-function runSync(cwd: string): { stdout: string; stderr: string; code: number } {
+function runSync(cwd: string, args: string[] = []): { stdout: string; stderr: string; code: number } {
   try {
-    const stdout = execFileSync(process.execPath, [BIN, 'sync'], {
+    const stdout = execFileSync(process.execPath, [BIN, 'sync', ...args], {
       cwd,
       encoding: 'utf-8',
       env: { ...process.env, CODEGRAPH_NO_DAEMON: '1', CODEGRAPH_WASM_RELAUNCHED: '1', CODEGRAPH_TELEMETRY: '0' },
@@ -71,6 +71,19 @@ describe('codegraph sync output', () => {
       expect(code).toBe(0);
       expect(stdout).toMatch(/index busy/i);
       expect(stdout).not.toMatch(/already up to date/i);
+    } finally {
+      lock.release();
+    }
+  });
+
+  it('returns a failure code for quiet sync when the index is busy', () => {
+    const lock = new FileLock(path.join(tempDir, '.codegraph', 'codegraph.lock'));
+    lock.acquire();
+    try {
+      const { stdout, stderr, code } = runSync(tempDir, ['--quiet']);
+      expect(code).toBe(1);
+      expect(stdout).toBe('');
+      expect(stderr).toBe('');
     } finally {
       lock.release();
     }

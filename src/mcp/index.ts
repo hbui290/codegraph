@@ -317,7 +317,10 @@ export class MCPServer {
       process.stderr.write(`[CodeGraph MCP] Direct mode: ${reason}.\n`);
     }
     this.engine = new MCPEngine();
-    const transport = new StdioTransport();
+    const transport = new StdioTransport({
+      exitOnClose: false,
+      onClose: () => this.stop(),
+    });
     this.session = new MCPSession(transport, this.engine, {
       explicitProjectPath: this.projectPath,
     });
@@ -330,7 +333,7 @@ export class MCPServer {
     this.session.start();
 
     // Detect parent-process death — same logic as pre-refactor. When stdin
-    // closes we go through StdioTransport's `process.exit(0)` already, but
+    // closes StdioTransport routes through stop() so engine cleanup drains, but
     // SIGKILL of the parent doesn't reliably close stdin on Linux (#277).
     // Also treat a stdin `'error'` (a socket-backed stdin can fail with
     // ECONNRESET/hangup instead of a clean close) as shutdown, and destroy the

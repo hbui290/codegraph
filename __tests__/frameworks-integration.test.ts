@@ -1091,16 +1091,16 @@ describe('Callback synthesis target selection', () => {
     tmpDir = undefined;
   });
 
-  it('uses the callback method from the subscribing file when names collide (#1355)', async () => {
+  it('uses this.method when an imported callback has the same name (#1355)', async () => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'cg-callback-'));
-    fs.writeFileSync(path.join(tmpDir, 'decoy.ts'), 'export class Decoy { triggerRender() {} }\n');
+    fs.writeFileSync(path.join(tmpDir, 'decoy.ts'), 'export function triggerRender() {}\n');
     fs.writeFileSync(
       path.join(tmpDir, 'store.ts'),
       'export class Store {\n  handlers = new Set<() => void>();\n  subscribe(callback: () => void) { this.handlers.add(callback); }\n  emit() { this.handlers.forEach((handler) => handler()); }\n}\nexport const store = new Store();\n'
     );
     fs.writeFileSync(
       path.join(tmpDir, 'real.ts'),
-      "import { store } from './store';\nexport class Real {\n  triggerRender() {}\n  connect() { store.subscribe(this.triggerRender); }\n}\n"
+      "import { store } from './store';\nimport { triggerRender } from './decoy';\nexport class Real {\n  triggerRender() {}\n  connect() { store.subscribe(this.triggerRender); }\n}\n"
     );
 
     const cg = CodeGraph.initSync(tmpDir);
@@ -1108,7 +1108,9 @@ describe('Callback synthesis target selection', () => {
     try {
       const emit = cg.getNodesByName('emit').find((node) => node.filePath.endsWith('store.ts'));
       const real = cg.getNodesByName('triggerRender').find((node) => node.filePath.endsWith('real.ts'));
-      const decoy = cg.getNodesByName('triggerRender').find((node) => node.filePath.endsWith('decoy.ts'));
+      const decoy = cg.getNodesByName('triggerRender').find(
+        (node) => node.filePath.endsWith('decoy.ts') && node.kind === 'function'
+      );
       expect(emit).toBeDefined();
       expect(real).toBeDefined();
       const callbackEdges = cg.getOutgoingEdges(emit!.id).filter(

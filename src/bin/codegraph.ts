@@ -869,8 +869,9 @@ program
       const cg = await CodeGraph.open(projectPath);
 
       if (options.quiet) {
-        await cg.sync();
-        cg.destroy();
+        const result = await cg.sync();
+        await cg.destroy();
+        if (result.skippedDueToLock) process.exitCode = 1;
         return;
       }
 

@@ -30,6 +30,7 @@ import {
   type WatchOptions,
 } from '../src/sync/watcher';
 import CodeGraph, { type SyncResult } from '../src/index';
+import type { ResolutionResult } from '../src/resolution/types';
 
 type SyncFn = () => Promise<{ filesChanged: number; durationMs: number }>;
 
@@ -904,6 +905,107 @@ describe('FileWatcher', () => {
       releaseSync();
       await syncing;
       await closing;
+      expect(dbClose).toHaveBeenCalledTimes(1);
+    });
+
+    it('defers database close until direct batched resolution settles', async () => {
+      cg = CodeGraph.initSync(testDir, {
+        config: { include: ['**/*.ts'], exclude: [] },
+      });
+
+      let releaseResolution!: () => void;
+      const resolutionReleased = new Promise<void>((resolve) => {
+        releaseResolution = resolve;
+      });
+      const resolver = (cg as unknown as {
+        resolver: { resolveAndPersistBatched(): Promise<ResolutionResult> };
+      }).resolver;
+      vi.spyOn(resolver, 'resolveAndPersistBatched').mockImplementation(async () => {
+        await resolutionReleased;
+        return {
+          resolved: [],
+          unresolved: [],
+          stats: { total: 0, resolved: 0, unresolved: 0, byMethod: {} },
+        };
+      });
+      const dbClose = vi.spyOn((cg as unknown as { db: { close(): void } }).db, 'close');
+
+      const resolving = cg.resolveReferencesBatched();
+      const closing = cg.close();
+      expect(dbClose).not.toHaveBeenCalled();
+
+      releaseResolution();
+      await resolving;
+      await closing;
+      expect(dbClose).toHaveBeenCalledTimes(1);
+    });
+
+    it('closes the database after a direct batched resolution rejects', async () => {
+      cg = CodeGraph.initSync(testDir, {
+        config: { include: ['**/*.ts'], exclude: [] },
+      });
+
+      let rejectResolution!: (error: Error) => void;
+      const resolutionRejected = new Promise<ResolutionResult>((_, reject) => {
+        rejectResolution = reject;
+      });
+      const resolver = (cg as unknown as {
+        resolver: { resolveAndPersistBatched(): Promise<ResolutionResult> };
+      }).resolver;
+      vi.spyOn(resolver, 'resolveAndPersistBatched').mockReturnValue(resolutionRejected);
+      const dbClose = vi.spyOn((cg as unknown as { db: { close(): void } }).db, 'close');
+
+      const resolving = cg.resolveReferencesBatched();
+      const closing = cg.close();
+      rejectResolution(new Error('resolution failed'));
+
+      await expect(resolving).rejects.toThrow('resolution failed');
+      await expect(closing).rejects.toThrow('resolution failed');
+      expect(dbClose).toHaveBeenCalledTimes(1);
+    });
+
+    it('waits for every direct batched resolution before closing after one rejects', async () => {
+      cg = CodeGraph.initSync(testDir, {
+        config: { include: ['**/*.ts'], exclude: [] },
+      });
+
+      let rejectFirst!: (error: Error) => void;
+      const firstResolution = new Promise<ResolutionResult>((_, reject) => {
+        rejectFirst = reject;
+      });
+      let releaseSecond!: (result: ResolutionResult) => void;
+      const secondResolution = new Promise<ResolutionResult>((resolve) => {
+        releaseSecond = resolve;
+      });
+      const resolver = (cg as unknown as {
+        resolver: { resolveAndPersistBatched(): Promise<ResolutionResult> };
+      }).resolver;
+      vi.spyOn(resolver, 'resolveAndPersistBatched')
+        .mockReturnValueOnce(firstResolution)
+        .mockReturnValueOnce(secondResolution);
+      const dbClose = vi.spyOn((cg as unknown as { db: { close(): void } }).db, 'close');
+
+      const resolvingFirst = cg.resolveReferencesBatched();
+      const resolvingSecond = cg.resolveReferencesBatched();
+      const closingResult = cg.close().then(
+        () => ({ error: undefined }),
+        (error: unknown) => ({ error })
+      );
+
+      rejectFirst(new Error('first resolution failed'));
+      await expect(resolvingFirst).rejects.toThrow('first resolution failed');
+      await Promise.resolve();
+      expect(dbClose).not.toHaveBeenCalled();
+
+      releaseSecond({
+        resolved: [],
+        unresolved: [],
+        stats: { total: 0, resolved: 0, unresolved: 0, byMethod: {} },
+      });
+      await resolvingSecond;
+      const { error } = await closingResult;
+      expect(error).toBeInstanceOf(Error);
+      expect((error as Error).message).toBe('first resolution failed');
       expect(dbClose).toHaveBeenCalledTimes(1);
     });
 

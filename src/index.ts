@@ -165,6 +165,7 @@ export class CodeGraph {
   // File watcher for auto-sync on file changes
   private watcher: FileWatcher | null = null;
   private watcherDrains = new Set<Promise<void>>();
+  private resolverDrains = new Set<Promise<ResolutionResult>>();
   private closing = false;
   private resourcesClosed = false;
   private closePromise: Promise<void> | null = null;
@@ -434,13 +435,17 @@ export class CodeGraph {
 
     // Stop new watcher work, then drain every indexing operation that already
     // owns (or is queued on) the shared DB before closing its handle.
-    const drains = [...this.watcherDrains];
+    const drains: Promise<unknown>[] = [...this.watcherDrains, ...this.resolverDrains];
     if (this.indexMutex.isLocked()) {
       drains.push(this.indexMutex.withLock(() => undefined));
     }
     if (drains.length > 0) {
-      this.closePromise = Promise.all(drains).then(() => {
+      this.closePromise = Promise.allSettled(drains).then((results) => {
         this.finalizeClose();
+        const failure = results.find(
+          (result): result is PromiseRejectedResult => result.status === 'rejected'
+        );
+        if (failure) throw failure.reason;
       });
       return this.closePromise;
     }
@@ -1217,7 +1222,8 @@ export class CodeGraph {
     // whole phase's write volume (22GB on a 4.6GB DB at kernel scale).
     backpressure?: () => Promise<void> | null
   ): Promise<ResolutionResult> {
-    return this.resolver.resolveAndPersistBatched(onProgress, undefined, onSynthesisProgress, {
+    if (this.closing) throw new Error('CodeGraph is closing');
+    const resolving = this.resolver.resolveAndPersistBatched(onProgress, undefined, onSynthesisProgress, {
       dbPath: this.db.getPath(),
       // Bulk-edge-load hooks: on big runs the resolver drops the non-unique
       // edge indexes for the batch loop and recreates them before synthesis
@@ -1234,6 +1240,12 @@ export class CodeGraph {
       },
       backpressure,
     });
+    this.resolverDrains.add(resolving);
+    void resolving.then(
+      () => this.resolverDrains.delete(resolving),
+      () => this.resolverDrains.delete(resolving)
+    );
+    return resolving;
   }
 
   /**
