@@ -852,7 +852,7 @@ export class ToolHandler {
   /**
    * Update the default CodeGraph instance (e.g. after lazy initialization)
    */
-  setDefaultCodeGraph(cg: CodeGraph): void {
+  setDefaultCodeGraph(cg: CodeGraph | null): void {
     this.cg = cg;
   }
 
@@ -1137,12 +1137,14 @@ export class ToolHandler {
   /**
    * Close all cached project connections
    */
-  closeAll(): void {
-    for (const cg of this.projectCache.values()) {
-      cg.close();
-    }
+  closeAll(): Promise<void> {
+    const cached = [...this.projectCache.values()];
     this.projectCache.clear();
     this.worktreeMismatchCache.clear();
+    return Promise.allSettled(cached.map((cg) => cg.close())).then((results) => {
+      const failure = results.find((result) => result.status === 'rejected');
+      if (failure?.status === 'rejected') throw failure.reason;
+    });
   }
 
   /**

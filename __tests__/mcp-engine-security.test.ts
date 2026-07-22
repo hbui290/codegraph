@@ -17,10 +17,10 @@ describe('MCPEngine sensitive-root refusal', () => {
     expect(engine.hasDefaultCodeGraph()).toBe(false);
   });
 
-  it('does not open a sensitive root during synchronous retry initialization', () => {
+  it('does not open a sensitive root during retry initialization', async () => {
     const engine = new MCPEngine({ watch: false });
 
-    engine.retryInitializeSync('/safe-looking-symlink');
+    await engine.retryInitializeSync('/safe-looking-symlink');
 
     expect(engine.getProjectPath()).toBeNull();
     expect(engine.hasDefaultCodeGraph()).toBe(false);

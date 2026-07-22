@@ -29,7 +29,7 @@ import {
   __setFsWatchForTests,
   type WatchOptions,
 } from '../src/sync/watcher';
-import CodeGraph from '../src/index';
+import CodeGraph, { type SyncResult } from '../src/index';
 
 type SyncFn = () => Promise<{ filesChanged: number; durationMs: number }>;
 
@@ -545,6 +545,7 @@ describe('FileWatcher', () => {
       expect(after.some((p) => p.startsWith('docs/'))).toBe(false);
 
       watcher.stop();
+      await watcher.waitUntilIdle();
       cg.close();
     });
 
@@ -772,6 +773,138 @@ describe('FileWatcher', () => {
       // After close, isWatching should be false
       // (we can't call isWatching after close since DB is closed,
       //  but we verify no errors are thrown)
+    });
+
+    it('defers database close until an in-flight watcher sync settles', async () => {
+      cg = CodeGraph.initSync(testDir, {
+        config: { include: ['**/*.ts'], exclude: [] },
+      });
+      await cg.indexAll();
+
+      let signalSyncStarted!: () => void;
+      const syncStarted = new Promise<void>((resolve) => {
+        signalSyncStarted = resolve;
+      });
+      let releaseSync!: () => void;
+      const syncReleased = new Promise<void>((resolve) => {
+        releaseSync = resolve;
+      });
+      const syncResult: SyncResult = {
+        filesChecked: 1,
+        filesAdded: 0,
+        filesModified: 1,
+        filesRemoved: 0,
+        nodesUpdated: 1,
+        durationMs: 1,
+      };
+      vi.spyOn(cg, 'sync').mockImplementation(async () => {
+        signalSyncStarted();
+        await syncReleased;
+        return syncResult;
+      });
+      const dbClose = vi.spyOn((cg as unknown as { db: { close(): void } }).db, 'close');
+
+      expect(cg.watch({ debounceMs: 1, inertForTests: true })).toBe(true);
+      expect(__emitWatchEventForTests(testDir, 'src/index.ts')).toBe(true);
+      await syncStarted;
+
+      try {
+        cg.unwatch();
+        const closing = cg.close();
+        expect(dbClose).not.toHaveBeenCalled();
+        expect(cg.close()).toBe(closing);
+        expect(cg.watch({ inertForTests: true })).toBe(false);
+        releaseSync();
+        await closing;
+      } finally {
+        releaseSync();
+      }
+
+      expect(dbClose).toHaveBeenCalledTimes(1);
+    });
+
+    it('keeps the index directory until an in-flight watcher sync settles', async () => {
+      cg = CodeGraph.initSync(testDir, {
+        config: { include: ['**/*.ts'], exclude: [] },
+      });
+      await cg.indexAll();
+
+      let signalSyncStarted!: () => void;
+      const syncStarted = new Promise<void>((resolve) => {
+        signalSyncStarted = resolve;
+      });
+      let releaseSync!: () => void;
+      const syncReleased = new Promise<void>((resolve) => {
+        releaseSync = resolve;
+      });
+      vi.spyOn(cg, 'sync').mockImplementation(async () => {
+        signalSyncStarted();
+        await syncReleased;
+        return {
+          filesChecked: 1,
+          filesAdded: 0,
+          filesModified: 1,
+          filesRemoved: 0,
+          nodesUpdated: 1,
+          durationMs: 1,
+        };
+      });
+
+      expect(cg.watch({ debounceMs: 1, inertForTests: true })).toBe(true);
+      expect(__emitWatchEventForTests(testDir, 'src/index.ts')).toBe(true);
+      await syncStarted;
+
+      const uninitializing = cg.uninitialize();
+      try {
+        expect(CodeGraph.isInitialized(testDir)).toBe(true);
+      } finally {
+        releaseSync();
+      }
+      await uninitializing;
+      expect(CodeGraph.isInitialized(testDir)).toBe(false);
+    });
+
+    it('defers database close until a direct sync settles', async () => {
+      cg = CodeGraph.initSync(testDir, {
+        config: { include: ['**/*.ts'], exclude: [] },
+      });
+      await cg.indexAll();
+
+      let signalSyncStarted!: () => void;
+      const syncStarted = new Promise<void>((resolve) => {
+        signalSyncStarted = resolve;
+      });
+      let releaseSync!: () => void;
+      const syncReleased = new Promise<void>((resolve) => {
+        releaseSync = resolve;
+      });
+      const orchestrator = (cg as unknown as {
+        orchestrator: { sync(): Promise<SyncResult> };
+      }).orchestrator;
+      vi.spyOn(orchestrator, 'sync').mockImplementation(async () => {
+        signalSyncStarted();
+        await syncReleased;
+        return {
+          filesChecked: 1,
+          filesAdded: 0,
+          filesModified: 0,
+          filesRemoved: 0,
+          nodesUpdated: 0,
+          durationMs: 1,
+        };
+      });
+      const dbClose = vi.spyOn((cg as unknown as { db: { close(): void } }).db, 'close');
+
+      const syncing = cg.sync();
+      await syncStarted;
+      const closing = cg.close();
+      expect(dbClose).not.toHaveBeenCalled();
+      await expect(cg.sync()).rejects.toThrow('CodeGraph is closing');
+
+      releaseSync();
+      await syncing;
+      await closing;
+      expect(dbClose).toHaveBeenCalledTimes(1);
     });
 
     it('should auto-sync when files change while watching (real fs.watch end-to-end)', async () => {

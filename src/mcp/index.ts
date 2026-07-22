@@ -300,8 +300,13 @@ export class MCPServer {
       this.session = null;
     }
     if (this.engine) {
-      this.engine.stop();
+      const stopping = this.engine.stop();
       this.engine = null;
+      void stopping.then(
+        () => process.exit(0),
+        () => process.exit(0)
+      );
+      return;
     }
     process.exit(0);
   }

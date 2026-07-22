@@ -324,7 +324,7 @@ export class MCPSession {
     // Last resort: walk from the best candidate (sync open). Picks up
     // projects that appeared after the server started.
     const candidate = hint ?? process.cwd();
-    this.engine.retryInitializeSync(candidate);
+    await this.engine.retryInitializeSync(candidate);
   }
 
   /**

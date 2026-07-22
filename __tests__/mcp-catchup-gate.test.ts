@@ -15,11 +15,12 @@
  * the engine-driven path (proves the engine actually pokes the gate).
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import CodeGraph from '../src/index';
+import { MCPEngine, __setCodeGraphLoaderForTests } from '../src/mcp/engine';
 import { ToolHandler } from '../src/mcp/tools';
 
 describe('MCP catch-up gate', () => {
@@ -44,10 +45,83 @@ describe('MCP catch-up gate', () => {
     handler = new ToolHandler(cg);
   });
 
-  afterEach(() => {
+  afterEach(async () => {
     try { cg.unwatch(); } catch { /* ignore */ }
-    try { cg.close(); } catch { /* ignore */ }
+    try { await cg.close(); } catch { /* ignore */ }
+    __setCodeGraphLoaderForTests(null);
+    vi.restoreAllMocks();
     if (fs.existsSync(testDir)) fs.rmSync(testDir, { recursive: true, force: true });
+  });
+
+  it('stop waits for initialization that opens after shutdown begins', async () => {
+    let signalOpenStarted!: () => void;
+    const openStarted = new Promise<void>((resolve) => {
+      signalOpenStarted = resolve;
+    });
+    let releaseOpen!: () => void;
+    const openReleased = new Promise<void>((resolve) => {
+      releaseOpen = resolve;
+    });
+    const lateCg = { close: vi.fn().mockResolvedValue(undefined) } as unknown as CodeGraph;
+    __setCodeGraphLoaderForTests(() => ({
+      open: async () => {
+        signalOpenStarted();
+        await openReleased;
+        return lateCg;
+      },
+    }) as unknown as typeof CodeGraph);
+
+    const engine = new MCPEngine({ watch: false, queryPool: false });
+    const initializing = engine.ensureInitialized(testDir);
+    await openStarted;
+
+    let stopped = false;
+    const stopping = engine.stop().then(() => {
+      stopped = true;
+    });
+    await Promise.resolve();
+    expect(stopped).toBe(false);
+
+    releaseOpen();
+    await Promise.all([initializing, stopping]);
+    expect(lateCg.close).toHaveBeenCalledTimes(1);
+    expect(engine.hasDefaultCodeGraph()).toBe(false);
+  });
+
+  it('stop waits for retry cleanup and prevents a replacement open', async () => {
+    let signalCloseStarted!: () => void;
+    const closeStarted = new Promise<void>((resolve) => {
+      signalCloseStarted = resolve;
+    });
+    let releaseClose!: () => void;
+    const closeReleased = new Promise<void>((resolve) => {
+      releaseClose = resolve;
+    });
+    const staleCg = {
+      close: vi.fn(() => {
+        signalCloseStarted();
+        return closeReleased;
+      }),
+    } as unknown as CodeGraph;
+    const openSync = vi.fn();
+    __setCodeGraphLoaderForTests(() => ({ openSync }) as unknown as typeof CodeGraph);
+
+    const engine = new MCPEngine({ watch: false, queryPool: false });
+    (engine as unknown as { cg: CodeGraph | null }).cg = staleCg;
+    const retrying = engine.retryInitializeSync(testDir);
+    await closeStarted;
+
+    let stopped = false;
+    const stopping = engine.stop().then(() => {
+      stopped = true;
+    });
+    await Promise.resolve();
+    expect(stopped).toBe(false);
+
+    releaseClose();
+    await Promise.all([retrying, stopping]);
+    expect(openSync).not.toHaveBeenCalled();
+    expect(staleCg.close).toHaveBeenCalledTimes(1);
   });
 
   it('awaits the gate before serving the first tool call', async () => {

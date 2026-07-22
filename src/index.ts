@@ -164,6 +164,10 @@ export class CodeGraph {
 
   // File watcher for auto-sync on file changes
   private watcher: FileWatcher | null = null;
+  private watcherDrains = new Set<Promise<void>>();
+  private closing = false;
+  private resourcesClosed = false;
+  private closePromise: Promise<void> | null = null;
 
   private constructor(
     db: DatabaseConnection,
@@ -422,9 +426,33 @@ export class CodeGraph {
   /**
    * Close the CodeGraph instance and release resources
    */
-  close(): void {
+  close(): Promise<void> {
+    if (this.closePromise) return this.closePromise;
+    this.closing = true;
+
     this.unwatch();
-    // Release file lock if held
+
+    // Stop new watcher work, then drain every indexing operation that already
+    // owns (or is queued on) the shared DB before closing its handle.
+    const drains = [...this.watcherDrains];
+    if (this.indexMutex.isLocked()) {
+      drains.push(this.indexMutex.withLock(() => undefined));
+    }
+    if (drains.length > 0) {
+      this.closePromise = Promise.all(drains).then(() => {
+        this.finalizeClose();
+      });
+      return this.closePromise;
+    }
+
+    this.finalizeClose();
+    this.closePromise = Promise.resolve();
+    return this.closePromise;
+  }
+
+  private finalizeClose(): void {
+    if (this.resourcesClosed) return;
+    this.resourcesClosed = true;
     this.fileLock.release();
     this.db.close();
   }
@@ -446,6 +474,7 @@ export class CodeGraph {
    * Uses a mutex to prevent concurrent indexing operations.
    */
   async indexAll(options: IndexOptions = {}): Promise<IndexResult> {
+    if (this.closing) throw new Error('CodeGraph is closing');
     return this.indexMutex.withLock(async () => {
       try {
         this.fileLock.acquire();
@@ -732,6 +761,7 @@ export class CodeGraph {
    * Uses a mutex to prevent concurrent indexing operations.
    */
   async indexFiles(filePaths: string[]): Promise<IndexResult> {
+    if (this.closing) throw new Error('CodeGraph is closing');
     return this.indexMutex.withLock(async () => {
       try {
         this.fileLock.acquire();
@@ -752,6 +782,7 @@ export class CodeGraph {
    * Uses a mutex to prevent concurrent indexing operations.
    */
   async sync(options: IndexOptions = {}): Promise<SyncResult> {
+    if (this.closing) throw new Error('CodeGraph is closing');
     return this.indexMutex.withLock(async () => {
       try {
         this.fileLock.acquire();
@@ -999,6 +1030,7 @@ export class CodeGraph {
    * @returns true if watching started successfully
    */
   watch(options: WatchOptions = {}): boolean {
+    if (this.closing) return false;
     if (this.watcher?.isActive()) return true;
 
     this.watcher = new FileWatcher(
@@ -1027,8 +1059,14 @@ export class CodeGraph {
    */
   unwatch(): void {
     if (this.watcher) {
-      this.watcher.stop();
+      const watcher = this.watcher;
+      watcher.stop();
       this.watcher = null;
+      if (watcher.isSyncing()) {
+        const drain = watcher.waitUntilIdle();
+        this.watcherDrains.add(drain);
+        void drain.then(() => this.watcherDrains.delete(drain));
+      }
     }
   }
 
@@ -1437,6 +1475,7 @@ export class CodeGraph {
    * holds the index lock — that process's own sync heals it).
    */
   async healSegmentVocabIfEmpty(): Promise<boolean> {
+    if (this.closing) throw new Error('CodeGraph is closing');
     const empty = (() => {
       try { return this.queries.isNameSegmentVocabEmpty(); } catch { return false; }
     })();
@@ -1823,8 +1862,8 @@ export class CodeGraph {
    * Alias for close() for backwards compatibility.
    * @deprecated Use close() instead
    */
-  destroy(): void {
-    this.close();
+  destroy(): Promise<void> {
+    return this.close();
   }
 
   /**
@@ -1833,8 +1872,8 @@ export class CodeGraph {
    *
    * WARNING: This permanently deletes all CodeGraph data for the project.
    */
-  uninitialize(): void {
-    this.close();
+  async uninitialize(): Promise<void> {
+    await this.close();
     removeDirectory(this.projectRoot);
   }
 }

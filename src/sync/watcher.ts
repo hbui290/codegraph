@@ -298,6 +298,8 @@ export class FileWatcher {
    */
   private syncStartedMs = 0;
   private syncing = false;
+  /** Resolved when the current sync settles; used to drain safely on shutdown. */
+  private idleWaiters: Array<() => void> = [];
   private stopped = false;
   /**
    * True once the initial watch set is established. Unlike the previous
@@ -786,6 +788,19 @@ export class FileWatcher {
     });
   }
 
+  /** Whether a watcher-triggered sync is currently using the CodeGraph instance. */
+  isSyncing(): boolean {
+    return this.syncing;
+  }
+
+  /** Resolve after the current watcher-triggered sync settles. */
+  waitUntilIdle(): Promise<void> {
+    if (!this.syncing) return Promise.resolve();
+    return new Promise((resolve) => {
+      this.idleWaiters.push(resolve);
+    });
+  }
+
   /**
    * Schedule a normal debounced sync after a source edit.
    */
@@ -900,6 +915,8 @@ export class FileWatcher {
       // still unindexed; the rescheduled sync sees the same set.
     } finally {
       this.syncing = false;
+      const idleWaiters = this.idleWaiters.splice(0);
+      for (const resolve of idleWaiters) resolve();
 
       // If pending files remain (mid-sync events, or this sync failed),
       // schedule another pass. After EITHER failure mode — lock contention or a

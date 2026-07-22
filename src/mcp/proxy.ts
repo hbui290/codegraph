@@ -245,8 +245,11 @@ export async function runLocalHandshakeProxy(deps: LocalHandshakeDeps): Promise<
   const shutdown = (): void => {
     if (shuttingDown) return; shuttingDown = true;
     try { daemonSocket?.destroy(); } catch { /* ignore */ }
-    try { engine?.stop(); } catch { /* ignore */ }
-    process.exit(0);
+    const stopping = engine?.stop() ?? Promise.resolve();
+    void stopping.then(
+      () => process.exit(0),
+      () => process.exit(0)
+    );
   };
   const ensureEngine = (): Promise<void> => {
     if (!engine) engine = deps.makeEngine();

@@ -24,8 +24,16 @@ import { QueryPool, resolvePoolSize } from './query-pool';
 // the daemon it spawns) bind + register tools in ~Node-startup time instead of
 // ~800ms, closing the "No such tool available" cold-start race that made headless
 // agents flounder. require() is sync + cached on the CommonJS build.
-const loadCodeGraph = (): typeof import('../index').default =>
+const defaultCodeGraphLoader = (): typeof import('../index').default =>
   (require('../index') as typeof import('../index')).default;
+let loadCodeGraph = defaultCodeGraphLoader;
+
+/** @internal Test-only seam for the lazy CodeGraph loader. */
+export function __setCodeGraphLoaderForTests(
+  loader: (() => typeof import('../index').default) | null
+): void {
+  loadCodeGraph = loader ?? defaultCodeGraphLoader;
+}
 
 export interface MCPEngineOptions {
   /**
@@ -63,6 +71,7 @@ export class MCPEngine {
   private watcherStarted = false;
   private opts: Required<MCPEngineOptions>;
   private closed = false;
+  private stopPromise: Promise<void> | null = null;
   // Off-loop read-tool pool (daemon mode only). Created lazily once the default
   // project is open — workers each hold their own WAL read connection.
   private queryPool: QueryPool | null = null;
@@ -155,9 +164,17 @@ export class MCPEngine {
    * background `ensureInitialized` already finished (or failed) and we need
    * to pick up a project that appeared *after* the engine started.
    */
-  retryInitializeSync(searchFrom: string): void {
-    if (this.closed) return;
-    if (this.toolHandler.hasDefaultCodeGraph()) return;
+  retryInitializeSync(searchFrom: string): Promise<void> {
+    if (this.closed) return Promise.resolve();
+    if (this.toolHandler.hasDefaultCodeGraph()) return Promise.resolve();
+    if (this.initPromise) return this.initPromise;
+    this.initPromise = this.doRetryInitializeSync(searchFrom).finally(() => {
+      this.initPromise = null;
+    });
+    return this.initPromise;
+  }
+
+  private async doRetryInitializeSync(searchFrom: string): Promise<void> {
     this.toolHandler.setDefaultProjectHint(searchFrom);
     const resolvedRoot = findNearestCodeGraphRoot(searchFrom);
     if (!resolvedRoot) return;
@@ -169,8 +186,11 @@ export class MCPEngine {
     try {
       // Close any previously failed instance to avoid leaking resources.
       if (this.cg) {
-        try { this.cg.close(); } catch { /* ignore */ }
+        const stale = this.cg;
         this.cg = null;
+        this.toolHandler.setDefaultCodeGraph(null);
+        try { await stale.close(); } catch { /* ignore */ }
+        if (this.closed) return;
       }
       this.cg = loadCodeGraph().openSync(resolvedRoot);
       this.projectPath = resolvedRoot;
@@ -187,21 +207,26 @@ export class MCPEngine {
    * Close everything. Used on graceful daemon shutdown (SIGTERM/idle timeout)
    * and on direct-mode stop. Idempotent.
    */
-  stop(): void {
-    if (this.closed) return;
+  stop(): Promise<void> {
+    if (this.stopPromise) return this.stopPromise;
     this.closed = true;
     // Detach + terminate the worker pool first so no tool call routes to a
     // worker mid-teardown; outstanding pool calls resolve with graceful guidance.
     this.toolHandler.setQueryPool(null);
-    if (this.queryPool) {
-      void this.queryPool.destroy();
-      this.queryPool = null;
-    }
-    this.toolHandler.closeAll();
+    const pending: Promise<unknown>[] = this.initPromise ? [this.initPromise] : [];
+    if (this.queryPool) pending.push(this.queryPool.destroy());
+    this.queryPool = null;
+    pending.push(this.toolHandler.closeAll());
     if (this.cg) {
-      try { this.cg.close(); } catch { /* ignore */ }
+      pending.push(this.cg.close());
       this.cg = null;
+      this.toolHandler.setDefaultCodeGraph(null);
     }
+    this.stopPromise = Promise.allSettled(pending).then((results) => {
+      const failure = results.find((result) => result.status === 'rejected');
+      if (failure?.status === 'rejected') throw failure.reason;
+    });
+    return this.stopPromise;
   }
 
   private async doInitialize(searchFrom: string): Promise<void> {
@@ -222,8 +247,13 @@ export class MCPEngine {
 
     this.projectPath = resolvedRoot;
     try {
-      this.cg = await loadCodeGraph().open(resolvedRoot);
-      this.toolHandler.setDefaultCodeGraph(this.cg);
+      const cg = await loadCodeGraph().open(resolvedRoot);
+      if (this.closed) {
+        await cg.close();
+        return;
+      }
+      this.cg = cg;
+      this.toolHandler.setDefaultCodeGraph(cg);
       this.startWatching();
       this.catchUpSync();
       this.maybeStartPool(resolvedRoot);
