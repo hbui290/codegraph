@@ -1,6 +1,6 @@
 {
   "name": "@colbymchenry/codegraph",
-  "version": "1.4.2",
+  "version": "1.5.0+hbui.1",
   "description": "Supercharge AI coding agents with semantic code intelligence — surgical context, fewer tool calls, faster answers. 100% local.",
   "repository": {
     "type": "git",
@@ -23,7 +23,7 @@
     "dev": "tsc --watch",
     "build:kernel": "bash scripts/build-kernel.sh",
     "cli": "npm run build && node dist/bin/codegraph.js",
-    "test": "npm run clean && npm run build && vitest run --no-file-parallelism --minWorkers=1 --maxWorkers=1",
+    "test": "npm run clean && npm run build && vitest run --no-file-parallelism --maxWorkers=1",
     "test:watch": "vitest",
     "test:eval": "vitest run __tests__/evaluation/",
     "eval": "npm run build && npx tsx __tests__/evaluation/runner.ts",
@@ -53,7 +53,7 @@
     "@types/node": "^20.19.30",
     "@types/picomatch": "^4.0.2",
     "typescript": "^5.0.0",
-    "vitest": "^2.1.9"
+    "vitest": "^4.1.10"
   },
   "engines": {
     "node": ">=20.0.0 <25.0.0"

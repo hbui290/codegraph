@@ -29,9 +29,7 @@ export default defineConfig({
       CODEGRAPH_TELEMETRY: '0',
     },
     pool: 'forks',
-    poolOptions: {
-      forks: { execArgv: ['--liftoff-only'] },
-    },
+    execArgv: ['--liftoff-only'],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],
