@@ -331,6 +331,7 @@ pub struct Walker<'t> {
     file_path: &'t str,
     variant: Variant,
     line_starts: Vec<usize>,
+    line_starts16: Vec<usize>,
     arena: Arena,
     tables: Tables,
     stack: Vec<Scope>,
@@ -376,6 +377,7 @@ pub fn extract(file_path: &str, source: &str, language: &str) -> Result<EmitOut,
         file_path,
         variant,
         line_starts: util::line_starts(source),
+        line_starts16: util::line_starts16(source),
         arena: Arena::default(),
         tables: Tables::default(),
         stack: Vec::new(),
@@ -484,7 +486,14 @@ impl<'t> Walker<'t> {
             return None;
         }
         let start_line = self.line_of(node);
-        let id = ids::node_id(self.file_path, kind, name, start_line, node.start_byte());
+        let start_offset = util::offset16(
+            self.src,
+            &self.line_starts,
+            &self.line_starts16,
+            node.start_position().row,
+            node.start_byte(),
+        );
+        let id = ids::node_id(self.file_path, kind, name, start_line, start_offset);
         // (c/cpp define no resolveBody hook, so createNode's endLine extension
         // for sibling-body grammars never fires — endLine is the node's own.)
         let end_line = node.end_position().row as u32 + 1;

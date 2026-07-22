@@ -89,6 +89,31 @@ pub fn line_starts(src: &str) -> Vec<usize> {
     out
 }
 
+/// UTF-16 offsets of each line start, matching web-tree-sitter `startIndex`.
+pub fn line_starts16(src: &str) -> Vec<usize> {
+    let mut out = vec![0usize];
+    let mut offset = 0usize;
+    for c in src.chars() {
+        offset += c.len_utf16();
+        if c == '\n' {
+            out.push(offset);
+        }
+    }
+    out
+}
+
+/// Absolute UTF-16 offset of a tree-sitter node's byte position.
+pub fn offset16(
+    src: &str,
+    byte_starts: &[usize],
+    utf16_starts: &[usize],
+    row: usize,
+    byte_pos: usize,
+) -> usize {
+    utf16_starts.get(row).copied().unwrap_or(0)
+        + col16(src, byte_starts, row, byte_pos) as usize
+}
+
 /// UTF-16 code units in `s` — what web-tree-sitter (and JS string ops)
 /// count, so kernel-emitted columns are byte-identical to the wasm path's.
 pub fn utf16_len(s: &str) -> usize {

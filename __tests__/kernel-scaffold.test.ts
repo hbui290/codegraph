@@ -141,12 +141,12 @@ describe.skipIf(!kernelBuilt)('kernel scaffold', () => {
       }
     });
 
-    it('kernel node ids are byte-identical to generateNodeId', () => {
+    it('kernel node ids are identical to generateNodeId', () => {
       const result = tryKernelExtract('src/utils.ts', FIXTURE, 'typescript')!;
       for (const n of result.nodes) {
         if (n.kind === 'file') continue;
         const startOffset = FIXTURE.split('\n').slice(0, n.startLine - 1)
-          .reduce((offset, line) => offset + Buffer.byteLength(line) + 1, 0) + n.startColumn;
+          .reduce((offset, line) => offset + line.length + 1, 0) + n.startColumn;
         expect(n.id).toBe(generateNodeId('src/utils.ts', n.kind, n.name, n.startLine, startOffset));
       }
     });
